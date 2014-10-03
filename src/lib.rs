@@ -8,8 +8,13 @@ like the `String` and `&str` types do for UTF-8.
 
 */
 
+// FIXME: moar docstrings
+
 #![feature(globs)]
 
+extern crate core;
+
+use core::str::Utf16CodeUnits;
 use std::fmt;
 use std::mem::transmute;
 use std::slice;
@@ -92,6 +97,11 @@ impl Wtf8String {
     }
 
     #[inline]
+    pub fn with_capacity(c: uint) -> Wtf8String {
+        Wtf8String { bytes: Vec::with_capacity(c) }
+    }
+
+    #[inline]
     pub unsafe fn from_bytes_unchecked(bytes: Vec<u8>) -> Wtf8String {
         Wtf8String { bytes: bytes }
     }
@@ -104,6 +114,20 @@ impl Wtf8String {
     #[inline]
     pub fn from_str(str: &str) -> Wtf8String {
         Wtf8String { bytes: str.as_bytes().to_vec() }
+    }
+
+    pub fn from_ill_formed_utf16(v: &[u16]) -> Wtf8String {
+        let mut string = Wtf8String::with_capacity(v.len());
+        for item in str::utf16_items(v) {
+            match item {
+                str::ScalarValue(c) => string.push_char(c),
+                // We’re violating some of the invariants of char here
+                // in order to skip the surrogate pair check,
+                // but such a pair would be a str::ScalarValue anyway.
+                str::LoneSurrogate(s) => string.push_char(unsafe { transmute(s as u32) })
+            }
+        }
+        string
     }
 
     #[inline]
@@ -311,6 +335,17 @@ pub trait Wtf8Methods {
                     return str::Owned(unsafe { string::raw::from_utf8(utf8_bytes) })
                 }
             }
+        }
+    }
+
+    #[inline]
+    fn to_ill_formed_utf16_units(&self) -> Utf16CodeUnits {
+        unsafe {
+            // We’re violating some of the invariants of &str here,
+            // but &str::to_utf16 only assumes a subset of these invariants
+            // that still hold for Wtf8Slice.
+            let not_really_a_str = str::raw::from_utf8(self.as_bytes());
+            not_really_a_str.utf16_units()
         }
     }
 }
@@ -622,4 +657,6 @@ mod tests {
         string.push(CodePoint::from_u32(0xD800).unwrap());
         assert_eq!(string.to_string_lossy(), Owned("aé 💩�".to_string()));
     }
+
+    // FIXME: UTF-16 tests
 }
