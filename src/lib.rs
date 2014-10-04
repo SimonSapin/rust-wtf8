@@ -131,8 +131,8 @@ impl Wtf8String {
     }
 
     #[inline]
-    pub unsafe fn push_bytes_unchecked(&mut self, other: &[u8]) {
-        self.bytes.push_all(other)
+    pub unsafe fn as_mut_vec(&mut self) -> &mut Vec<u8> {
+        &mut self.bytes
     }
 
     #[inline]
@@ -523,6 +523,15 @@ mod tests {
         assert_eq!(Wtf8String::from_string("".to_string()).as_bytes(), b"");
         assert_eq!(Wtf8String::from_string("aé 💩".to_string()).as_bytes(),
                    b"a\xC3\xA9 \xF0\x9F\x92\xA9");
+    }
+
+    #[test]
+    fn wtf8string_as_mut_vec() {
+        let mut string = Wtf8String::from_str("aé");
+        unsafe {
+            *string.as_mut_vec().get_mut(0) = b'A';
+        }
+        assert_eq!(string.as_str(), Some("Aé"));
     }
 
     #[test]
