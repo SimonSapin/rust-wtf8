@@ -72,6 +72,14 @@ impl CodePoint {
             _ => Some(unsafe { transmute(self.value) })
         }
     }
+
+    #[inline]
+    pub fn to_char_lossy(&self) -> char {
+        match self.value {
+            0xD800 ... 0xDFFF => '\uFFFD',
+            _ => unsafe { transmute(self.value) }
+        }
+    }
 }
 
 
@@ -504,6 +512,14 @@ mod tests {
         assert_eq!(c(0x61).to_char(), Some('a'))
         assert_eq!(c(0x1F4A9).to_char(), Some('💩'))
         assert_eq!(c(0xD800).to_char(), None)
+    }
+
+    #[test]
+    fn code_point_to_char_lossy() {
+        fn c(value: u32) -> CodePoint { CodePoint::from_u32(value).unwrap() }
+        assert_eq!(c(0x61).to_char_lossy(), 'a')
+        assert_eq!(c(0x1F4A9).to_char_lossy(), '💩')
+        assert_eq!(c(0xD800).to_char_lossy(), '\uFFFD')
     }
 
     #[test]
