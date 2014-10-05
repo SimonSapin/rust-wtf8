@@ -15,13 +15,14 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(globs)]
+#![feature(globs, default_type_params)]
 
 // FIXME https://github.com/rust-lang/rust/issues/17751
 extern crate core;
 use core::str::Utf16CodeUnits;
 
 use std::fmt;
+use std::hash::{Hash, Writer};
 use std::mem::transmute;
 use std::slice;
 use std::str;
@@ -35,7 +36,7 @@ static UTF8_REPLACEMENT_CHARACTER: &'static [u8] = b"\xEF\xBF\xBD";
 /// Compare with the `char` type,
 /// which represents a Unicode scalar value:
 /// a code point that is not a surrogate (U+D800 to U+DFFF).
-#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct CodePoint {
     value: u32
 }
@@ -113,7 +114,7 @@ impl CodePoint {
 ///
 /// Similar to `String`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
-#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct Wtf8String {
     bytes: Vec<u8>
 }
@@ -322,7 +323,7 @@ impl Extendable<CodePoint> for Wtf8String {
 ///
 /// Similar to `&str`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
-#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone, Hash)]
+#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct Wtf8Slice<'a> {
     bytes: &'a [u8]
 }
@@ -566,8 +567,33 @@ impl<'a> Iterator<CodePoint> for Wtf8CodePoints<'a> {
 }
 
 
+impl<S: Writer> Hash<S> for CodePoint {
+    #[inline]
+    fn hash(&self, state: &mut S) {
+        self.value.hash(state)
+    }
+}
+
+impl<S: Writer> Hash<S> for Wtf8String {
+    #[inline]
+    fn hash(&self, state: &mut S) {
+        state.write(self.bytes.as_slice());
+        0xfeu8.hash(state)
+    }
+}
+
+impl<'a, S: Writer> Hash<S> for Wtf8Slice<'a> {
+    #[inline]
+    fn hash(&self, state: &mut S) {
+        state.write(self.bytes);
+        0xfeu8.hash(state)
+    }
+}
+
+
 #[cfg(test)]
 mod tests {
+    use std::str;
     use super::*;
 
     #[test]
@@ -594,8 +620,8 @@ mod tests {
 
     #[test]
     fn code_point_to_string() {
-        assert_eq!(CodePoint::from_char('a').to_string(), "U+0061".to_string())
-        assert_eq!(CodePoint::from_char('💩').to_string(), "U+1F4A9".to_string())
+        assert_eq!(format!("{}", CodePoint::from_char('a')).as_slice(), "U+0061")
+        assert_eq!(format!("{}", CodePoint::from_char('💩')).as_slice(), "U+1F4A9")
     }
 
     #[test]
@@ -628,8 +654,8 @@ mod tests {
 
     #[test]
     fn wtf8string_from_string() {
-        assert_eq!(Wtf8String::from_string("".to_string()).bytes.as_slice(), b"");
-        assert_eq!(Wtf8String::from_string("aé 💩".to_string()).bytes.as_slice(),
+        assert_eq!(Wtf8String::from_string(String::from_str("")).bytes.as_slice(), b"");
+        assert_eq!(Wtf8String::from_string(String::from_str("aé 💩")).bytes.as_slice(),
                    b"a\xC3\xA9 \xF0\x9F\x92\xA9");
     }
 
@@ -750,7 +776,7 @@ mod tests {
     #[test]
     fn wtf8string_into_string() {
         let mut string = Wtf8String::from_str("aé 💩");
-        assert_eq!(string.clone().into_string(), Ok("aé 💩".to_string()));
+        assert_eq!(string.clone().into_string(), Ok(String::from_str("aé 💩")));
         string.push(CodePoint::from_u32(0xD800).unwrap());
         assert_eq!(string.clone().into_string(), Err(string));
     }
@@ -758,9 +784,9 @@ mod tests {
     #[test]
     fn wtf8string_into_string_lossy() {
         let mut string = Wtf8String::from_str("aé 💩");
-        assert_eq!(string.clone().into_string_lossy(), "aé 💩".to_string());
+        assert_eq!(string.clone().into_string_lossy(), String::from_str("aé 💩"));
         string.push(CodePoint::from_u32(0xD800).unwrap());
-        assert_eq!(string.clone().into_string_lossy(), "aé 💩�".to_string());
+        assert_eq!(string.clone().into_string_lossy(), String::from_str("aé 💩�"));
     }
 
     #[test]
@@ -855,13 +881,11 @@ mod tests {
 
     #[test]
     fn wtf8slice_to_string_lossy() {
-        use std::str::{Owned, Slice};
-
-        assert_eq!(Wtf8Slice::from_str("").to_string_lossy(), Slice(""));
-        assert_eq!(Wtf8Slice::from_str("aé 💩").to_string_lossy(), Slice("aé 💩"));
+        assert_eq!(Wtf8Slice::from_str("").to_string_lossy(), str::Slice(""));
+        assert_eq!(Wtf8Slice::from_str("aé 💩").to_string_lossy(), str::Slice("aé 💩"));
         let mut string = Wtf8String::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
-        assert_eq!(string.to_string_lossy(), Owned("aé 💩�".to_string()));
+        assert_eq!(string.to_string_lossy(), str::Owned(String::from_str("aé 💩�")));
     }
 
     #[test]
