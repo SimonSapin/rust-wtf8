@@ -15,18 +15,43 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(globs, default_type_params)]
+#![feature(globs, default_type_params, phase)]
 
-// FIXME https://github.com/rust-lang/rust/issues/17751
+#![no_std]
+
+#[phase(link, plugin)]
 extern crate core;
+
+extern crate collections;
+
+#[cfg(test)]
+#[phase(link, plugin)]
+extern crate std;
+
+#[cfg(test)]
+extern crate "native" as rt;  // provides the `start` lang item, compensate for #![no_std]
+
+use core::prelude::*;
+
+use collections::hash::{Hash, Writer};
+use collections::slice::{CloneableVector};
+use collections::str;
+use collections::string;
+use collections::string::String;
+use collections::vec::Vec;
+use core::fmt;
+use core::mem::transmute;
+use core::slice;
 use core::str::Utf16CodeUnits;
 
-use std::fmt;
-use std::hash::{Hash, Writer};
-use std::mem::transmute;
-use std::slice;
-use std::str;
-use std::string;
+// Compensate for #[no_std]
+#[cfg(not(test))]
+mod std {
+    pub use core::fmt;      // necessary for write!()
+    pub use core::option;   // deriving(PartialOrd)
+    pub use core::clone;    // deriving(Clone)
+    pub use core::cmp;      // deriving(Eq, Ord, etc.)
+}
 
 
 static UTF8_REPLACEMENT_CHARACTER: &'static [u8] = b"\xEF\xBF\xBD";
@@ -705,6 +730,7 @@ impl<'a, S: Writer> Hash<S> for Wtf8Slice<'a> {
 
 #[cfg(test)]
 mod tests {
+    use std::prelude::*;
     use std::str;
     use super::*;
 
