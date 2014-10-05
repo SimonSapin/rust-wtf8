@@ -391,15 +391,67 @@ pub trait Wtf8Methods {
         self.as_slice().bytes.len()
     }
 
+    /// Returns a slice of the given string for the byte range [`begin`..`end`).
+    ///
+    /// # Failure
+    ///
+    /// Fails when `begin` and `end` do not point to code point boundaries,
+    /// or point beyond the end of the string.
+    #[inline]
+    fn slice(&self, begin: uint, end: uint) -> Wtf8Slice {
+        unsafe {
+            // We’re violating some of the invariants of &str here,
+            // but &str::slice only assumes a subset of these invariants
+            // that still hold for Wtf8Slice.
+            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            Wtf8Slice::from_str(not_really_a_str.slice(begin, end))
+        }
+    }
+
+    /// Returns a slice of the given string from byte `begin` to its end.
+    ///
+    /// # Failure
+    ///
+    /// Fails when ``begin` does not point to a code point boundary,
+    /// or points beyond the end of the string.
+    #[inline]
+    fn slice_from(&self, begin: uint) -> Wtf8Slice {
+        unsafe {
+            // We’re violating some of the invariants of &str here,
+            // but &str::slice only assumes a subset of these invariants
+            // that still hold for Wtf8Slice.
+            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            Wtf8Slice::from_str(not_really_a_str.slice_from(begin))
+        }
+    }
+
+    /// Returns a slice of the given string from its beginning to byte `end`.
+    ///
+    /// # Failure
+    ///
+    /// Fails when ``end` does not point to a code point boundary,
+    /// or points beyond the end of the string.
+    #[inline]
+    fn slice_to(&self, end: uint) -> Wtf8Slice {
+        unsafe {
+            // We’re violating some of the invariants of &str here,
+            // but &str::slice only assumes a subset of these invariants
+            // that still hold for Wtf8Slice.
+            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            Wtf8Slice::from_str(not_really_a_str.slice_to(end))
+        }
+    }
+
     /// Return an iterator for the string’s code points.
     #[inline]
     fn code_points(&self) -> Wtf8CodePoints {
-        Wtf8CodePoints { crazy_unsafe_chars: unsafe {
+        unsafe {
             // We’re violating some of the invariants of &str here,
             // but &str::chars only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            str::raw::from_utf8(self.as_slice().bytes)
-        }.chars() }
+            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            Wtf8CodePoints { not_really_chars: not_really_a_str.chars() }
+        }
     }
 
     /// Try to convert the string to UTF-8 and return a `&str` slice.
@@ -568,16 +620,14 @@ fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
 /// Created with the method `.code_points()`.
 #[deriving(Clone)]
 pub struct Wtf8CodePoints<'a> {
-    crazy_unsafe_chars: str::Chars<'a>
+    not_really_chars: str::Chars<'a>
 }
 
 impl<'a> Iterator<CodePoint> for Wtf8CodePoints<'a> {
     #[inline]
     fn next(&mut self) -> Option<CodePoint> {
-        match self.crazy_unsafe_chars.next() {
-            Some(crazy_unsafe_char) => Some(unsafe {
-                CodePoint::from_u32_unchecked(crazy_unsafe_char as u32)
-            }),
+        match self.not_really_chars.next() {
+            Some(not_really_char) => Some(CodePoint::from_char(not_really_char)),
             None => None
         }
     }
@@ -892,6 +942,39 @@ mod tests {
     fn wtf8slice_len() {
         assert_eq!(Wtf8Slice::from_str("").len(), 0);
         assert_eq!(Wtf8Slice::from_str("aé 💩").len(), 8);
+    }
+
+    #[test]
+    fn wtf8slice_slice() {
+        assert_eq!(Wtf8Slice::from_str("aé 💩").slice(1, 4).bytes, b"\xC3\xA9 ");
+    }
+
+    #[test]
+    #[should_fail]
+    fn wtf8slice_slice_not_code_point_boundary() {
+        Wtf8Slice::from_str("aé 💩").slice(2, 4);
+    }
+
+    #[test]
+    fn wtf8slice_slice_from() {
+        assert_eq!(Wtf8Slice::from_str("aé 💩").slice_from(1).bytes, b"\xC3\xA9 \xF0\x9F\x92\xA9");
+    }
+
+    #[test]
+    #[should_fail]
+    fn wtf8slice_slice_from_not_code_point_boundary() {
+        Wtf8Slice::from_str("aé 💩").slice_from(2);
+    }
+
+    #[test]
+    fn wtf8slice_slice_to() {
+        assert_eq!(Wtf8Slice::from_str("aé 💩").slice_to(4).bytes, b"a\xC3\xA9 ");
+    }
+
+    #[test]
+    #[should_fail]
+    fn wtf8slice_slice_to_not_code_point_boundary() {
+        Wtf8Slice::from_str("aé 💩").slice_from(5);
     }
 
     #[test]
