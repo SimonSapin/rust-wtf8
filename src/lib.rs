@@ -254,6 +254,23 @@ impl Wtf8String {
         }
     }
 
+    /// Shortens a string to the specified length.
+    ///
+    /// # Failure
+    ///
+    /// Fails if `new_len` > current length,
+    /// or if `new_len` is not a code point boundary.
+    #[inline]
+    pub fn truncate(&mut self, new_len: uint) {
+        unsafe {
+            // We’re violating some of the invariants of String here,
+            // but String::truncate only assumes a subset of these invariants
+            // that still hold for Wtf8String.
+            let not_really_a_string: &mut String = transmute(self);
+            not_really_a_string.truncate(new_len)
+        }
+    }
+
     /// Consume the WTF-8 string and try to convert it to UTF-8.
     ///
     /// This does not copy the data.
@@ -771,6 +788,27 @@ mod tests {
         let mut string = Wtf8String::new();
         string.push_wtf8(w(b"\xED\xB0\x80"));  // trail
         assert_eq!(string.bytes.as_slice(), b"\xED\xB0\x80");
+    }
+
+    #[test]
+    fn wtf8string_truncate() {
+        let mut string = Wtf8String::from_str("aé");
+        string.truncate(1);
+        assert_eq!(string.bytes.as_slice(), b"a");
+    }
+
+    #[test]
+    #[should_fail]
+    fn wtf8string_truncate_fail_code_point_boundary() {
+        let mut string = Wtf8String::from_str("aé");
+        string.truncate(2);
+    }
+
+    #[test]
+    #[should_fail]
+    fn wtf8string_truncate_fail_longer() {
+        let mut string = Wtf8String::from_str("aé");
+        string.truncate(4);
     }
 
     #[test]
