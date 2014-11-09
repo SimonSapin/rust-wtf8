@@ -219,7 +219,7 @@ impl Wtf8String {
     /// with a supplementary code point,
     /// like concatenating ill-formed UTF-16 strings effectively would.
     #[inline]
-    pub fn push_wtf8(&mut self, other: Wtf8Slice) {
+    pub fn push_wtf8(&mut self, other: &Wtf8Slice) {
         match ((&*self).final_lead_surrogate(), other.initial_trail_surrogate()) {
             // Replace newly paired surrogates by a supplementary code point.
             (Some(lead), Some(trail)) => {
@@ -231,7 +231,7 @@ impl Wtf8String {
                 self.push_char(decode_surrogate_pair(lead, trail));
                 self.bytes.push_all(other_without_trail_surrogate);
             }
-            _ => self.bytes.push_all(other.bytes)
+            _ => self.bytes.push_all(&other.bytes)
         }
     }
 
@@ -365,38 +365,45 @@ impl Extendable<CodePoint> for Wtf8String {
 ///
 /// Similar to `&str`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
-#[deriving(Eq, PartialEq, Clone)]
-pub struct Wtf8Slice<'a> {
-    bytes: &'a [u8]
+pub struct Wtf8Slice {
+    bytes: [u8]
 }
 
+// FIXME: https://github.com/rust-lang/rust/issues/18805
+impl PartialEq for Wtf8Slice {
+    fn eq(&self, other: &Wtf8Slice) -> bool { self.bytes.eq(&other.bytes) }
+}
+
+// FIXME: https://github.com/rust-lang/rust/issues/18805
+impl Eq for Wtf8Slice {}
+
 // FIXME: https://github.com/rust-lang/rust/issues/18738
-impl<'a> PartialOrd for Wtf8Slice<'a> {
+impl PartialOrd for Wtf8Slice {
     #[inline]
     fn partial_cmp(&self, other: &Wtf8Slice) -> Option<Ordering> {
-        self.bytes.partial_cmp(other.bytes)
+        self.bytes.partial_cmp(&other.bytes)
     }
     #[inline]
-    fn lt(&self, other: &Wtf8Slice) -> bool { self.bytes.lt(other.bytes) }
+    fn lt(&self, other: &Wtf8Slice) -> bool { self.bytes.lt(&other.bytes) }
     #[inline]
-    fn le(&self, other: &Wtf8Slice) -> bool { self.bytes.le(other.bytes) }
+    fn le(&self, other: &Wtf8Slice) -> bool { self.bytes.le(&other.bytes) }
     #[inline]
-    fn gt(&self, other: &Wtf8Slice) -> bool { self.bytes.gt(other.bytes) }
+    fn gt(&self, other: &Wtf8Slice) -> bool { self.bytes.gt(&other.bytes) }
     #[inline]
-    fn ge(&self, other: &Wtf8Slice) -> bool { self.bytes.ge(other.bytes) }
+    fn ge(&self, other: &Wtf8Slice) -> bool { self.bytes.ge(&other.bytes) }
 }
 
 // FIXME: https://github.com/rust-lang/rust/issues/18738
-impl<'a> Ord for Wtf8Slice<'a> {
+impl Ord for Wtf8Slice {
     #[inline]
-    fn cmp(&self, other: &Wtf8Slice) -> Ordering { self.bytes.cmp(other.bytes) }
+    fn cmp(&self, other: &Wtf8Slice) -> Ordering { self.bytes.cmp(&other.bytes) }
 }
 
 
 /// Format the slice with double quotes,
 /// and surrogates as `\u` followed by four hexadecimal digits.
 /// Example: `"a\uD800"` for a slice with code points [U+0061, U+D800]
-impl<'a> fmt::Show for Wtf8Slice<'a> {
+impl fmt::Show for Wtf8Slice {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::FormatError> {
         try!(formatter.write(b"\""))
         let mut pos = 0;
@@ -416,13 +423,13 @@ impl<'a> fmt::Show for Wtf8Slice<'a> {
 }
 
 
-impl<'a> Wtf8Slice<'a> {
+impl Wtf8Slice {
     /// Create a WTF-8 slice from a UTF-8 `&str` slice.
     ///
     /// Since WTF-8 is a superset of UTF-8, this always succeeds.
     #[inline]
-    pub fn from_str(value: &str) -> Wtf8Slice {
-        Wtf8Slice { bytes: value.as_bytes() }
+    pub fn from_str(value: &str) -> &Wtf8Slice {
+        unsafe { transmute(value.as_bytes()) }
     }
 }
 
@@ -430,7 +437,7 @@ impl<'a> Wtf8Slice<'a> {
 /// Methods that apply to both `Wtf8String` and `Wtf8Slice`.
 pub trait Wtf8Methods {
     /// Return a slice view of the string.
-    fn as_slice(&self) -> Wtf8Slice;
+    fn as_slice(&self) -> &Wtf8Slice;
 
     /// Return the length, in WTF-8 bytes.
     #[inline]
@@ -445,12 +452,12 @@ pub trait Wtf8Methods {
     /// Fails when `begin` and `end` do not point to code point boundaries,
     /// or point beyond the end of the string.
     #[inline]
-    fn slice(&self, begin: uint, end: uint) -> Wtf8Slice {
+    fn slice(&self, begin: uint, end: uint) -> &Wtf8Slice {
         unsafe {
             // We’re violating some of the invariants of &str here,
             // but &str::slice only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            let not_really_a_str = str::raw::from_utf8(&self.as_slice().bytes);
             Wtf8Slice::from_str(not_really_a_str.slice(begin, end))
         }
     }
@@ -462,12 +469,12 @@ pub trait Wtf8Methods {
     /// Fails when `begin` is not at a code point boundary,
     /// or is beyond the end of the string.
     #[inline]
-    fn slice_from(&self, begin: uint) -> Wtf8Slice {
+    fn slice_from(&self, begin: uint) -> &Wtf8Slice {
         unsafe {
             // We’re violating some of the invariants of &str here,
             // but &str::slice only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            let not_really_a_str = str::raw::from_utf8(&self.as_slice().bytes);
             Wtf8Slice::from_str(not_really_a_str.slice_from(begin))
         }
     }
@@ -479,12 +486,12 @@ pub trait Wtf8Methods {
     /// Fails when `end` is not at a code point boundary,
     /// or is beyond the end of the string.
     #[inline]
-    fn slice_to(&self, end: uint) -> Wtf8Slice {
+    fn slice_to(&self, end: uint) -> &Wtf8Slice {
         unsafe {
             // We’re violating some of the invariants of &str here,
             // but &str::slice only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            let not_really_a_str = str::raw::from_utf8(&self.as_slice().bytes);
             Wtf8Slice::from_str(not_really_a_str.slice_to(end))
         }
     }
@@ -528,7 +535,7 @@ pub trait Wtf8Methods {
             // We’re violating some of the invariants of &str here,
             // but &str::slice only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            let not_really_a_str = str::raw::from_utf8(&self.as_slice().bytes);
             let range = not_really_a_str.char_range_at(position);
             (CodePoint::from_char(range.ch), range.next)
         }
@@ -541,7 +548,7 @@ pub trait Wtf8Methods {
             // We’re violating some of the invariants of &str here,
             // but &str::chars only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            let not_really_a_str = str::raw::from_utf8(&self.as_slice().bytes);
             Wtf8CodePoints { not_really_chars: not_really_a_str.chars() }
         }
     }
@@ -556,7 +563,7 @@ pub trait Wtf8Methods {
         // Well-formed WTF-8 is also well-formed UTF-8
         // if and only if it contains no surrogate.
         match self.next_surrogate(0) {
-            None => Some(unsafe { str::raw::from_utf8(self.as_slice().bytes) }),
+            None => Some(unsafe { str::raw::from_utf8(&self.as_slice().bytes) }),
             Some(_) => None,
         }
     }
@@ -569,10 +576,10 @@ pub trait Wtf8Methods {
     /// This only copies the data if necessary (if it contains any surrogate).
     fn to_string_lossy(&self) -> str::MaybeOwned {
         let surrogate_pos = match self.next_surrogate(0) {
-            None => return str::Slice(unsafe { str::raw::from_utf8(self.as_slice().bytes) }),
+            None => return str::Slice(unsafe { str::raw::from_utf8(&self.as_slice().bytes) }),
             Some((pos, _)) => pos,
         };
-        let wtf8_bytes = self.as_slice().bytes;
+        let wtf8_bytes = &self.as_slice().bytes;
         let mut utf8_bytes = Vec::with_capacity(self.len());
         utf8_bytes.push_all(wtf8_bytes.slice_to(surrogate_pos));
         utf8_bytes.push_all(UTF8_REPLACEMENT_CHARACTER);
@@ -604,7 +611,7 @@ pub trait Wtf8Methods {
             // We’re violating some of the invariants of &str here,
             // but &str::to_utf16 only assumes a subset of these invariants
             // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(self.as_slice().bytes);
+            let not_really_a_str = str::raw::from_utf8(&self.as_slice().bytes);
             not_really_a_str.utf16_units()
         }
     }
@@ -613,16 +620,16 @@ pub trait Wtf8Methods {
 /// Methods that apply to both `Wtf8String` and `Wtf8Slice`.
 impl Wtf8Methods for Wtf8String {
     #[inline]
-    fn as_slice(&self) -> Wtf8Slice {
-        Wtf8Slice { bytes: self.bytes.as_slice() }
+    fn as_slice(&self) -> &Wtf8Slice {
+        unsafe { transmute(self.bytes.as_slice()) }
     }
 
 }
 
 /// Methods that apply to both `Wtf8String` and `Wtf8Slice`.
-impl<'a> Wtf8Methods for Wtf8Slice<'a> {
+impl<'a> Wtf8Methods for &'a Wtf8Slice {
     #[inline]
-    fn as_slice(&self) -> Wtf8Slice {
+    fn as_slice(&self) -> &Wtf8Slice {
         *self
     }
 }
@@ -741,10 +748,10 @@ impl<S: Writer> Hash<S> for Wtf8String {
     }
 }
 
-impl<'a, S: Writer> Hash<S> for Wtf8Slice<'a> {
+impl<'a, S: Writer> Hash<S> for Wtf8Slice {
     #[inline]
     fn hash(&self, state: &mut S) {
-        state.write(self.bytes);
+        state.write(&self.bytes);
         0xfeu8.hash(state)
     }
 }
@@ -755,6 +762,7 @@ mod tests {
     use std::prelude::*;
     use std::str;
     use super::*;
+    use std::mem::transmute;
 
     #[test]
     fn code_point_from_u32() {
@@ -895,7 +903,7 @@ mod tests {
         string.push_wtf8(Wtf8Slice::from_str(" 💩"));
         assert_eq!(string.bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9");
 
-        fn w(value: &[u8]) -> Wtf8Slice { Wtf8Slice { bytes: value } }
+        fn w(value: &[u8]) -> &Wtf8Slice { unsafe { transmute(value) } }
 
         let mut string = Wtf8String::new();
         string.push_wtf8(w(b"\xED\xA0\xBD"));  // lead
@@ -1027,8 +1035,8 @@ mod tests {
 
     #[test]
     fn wtf8slice_from_str() {
-        assert_eq!(Wtf8Slice::from_str("").bytes, b"");
-        assert_eq!(Wtf8Slice::from_str("aé 💩").bytes, b"a\xC3\xA9 \xF0\x9F\x92\xA9");
+        assert_eq!(&Wtf8Slice::from_str("").bytes, b"");
+        assert_eq!(&Wtf8Slice::from_str("aé 💩").bytes, b"a\xC3\xA9 \xF0\x9F\x92\xA9");
     }
 
     #[test]
@@ -1039,7 +1047,7 @@ mod tests {
 
     #[test]
     fn wtf8slice_slice() {
-        assert_eq!(Wtf8Slice::from_str("aé 💩").slice(1, 4).bytes, b"\xC3\xA9 ");
+        assert_eq!(&Wtf8Slice::from_str("aé 💩").slice(1, 4).bytes, b"\xC3\xA9 ");
     }
 
     #[test]
@@ -1050,7 +1058,7 @@ mod tests {
 
     #[test]
     fn wtf8slice_slice_from() {
-        assert_eq!(Wtf8Slice::from_str("aé 💩").slice_from(1).bytes, b"\xC3\xA9 \xF0\x9F\x92\xA9");
+        assert_eq!(&Wtf8Slice::from_str("aé 💩").slice_from(1).bytes, b"\xC3\xA9 \xF0\x9F\x92\xA9");
     }
 
     #[test]
@@ -1061,7 +1069,7 @@ mod tests {
 
     #[test]
     fn wtf8slice_slice_to() {
-        assert_eq!(Wtf8Slice::from_str("aé 💩").slice_to(4).bytes, b"a\xC3\xA9 ");
+        assert_eq!(&Wtf8Slice::from_str("aé 💩").slice_to(4).bytes, b"a\xC3\xA9 ");
     }
 
     #[test]
