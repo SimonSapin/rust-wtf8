@@ -15,7 +15,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(globs, default_type_params, phase)]
+#![feature(globs, default_type_params, phase, macro_rules)]
 
 #![no_std]
 
@@ -41,8 +41,8 @@ use collections::string::String;
 use collections::vec::Vec;
 use core::fmt;
 use core::mem::transmute;
+use core::num::Saturating;
 use core::slice;
-use core::str::Utf16CodeUnits;
 
 // Compensate for #[no_std]
 #[cfg(not(test))]
@@ -52,6 +52,8 @@ mod std {
     pub use core::clone;    // deriving(Clone)
     pub use core::cmp;      // deriving(Eq, Ord, etc.)
 }
+
+mod not_quite_std;
 
 
 static UTF8_REPLACEMENT_CHARACTER: &'static [u8] = b"\xEF\xBF\xBD";
@@ -127,10 +129,7 @@ impl CodePoint {
     /// if the code point is a surrogate (from U+D800 to U+DFFF).
     #[inline]
     pub fn to_char_lossy(&self) -> char {
-        match self.value {
-            0xD800 ... 0xDFFF => '\uFFFD',
-            _ => unsafe { transmute(self.value) }
-        }
+        self.to_char().unwrap_or('\uFFFD')
     }
 }
 
@@ -203,10 +202,13 @@ impl Wtf8String {
         for item in str::utf16_items(v) {
             match item {
                 str::ScalarValue(c) => string.push_char(c),
-                // We’re violating some of the invariants of char here
-                // in order to skip the surrogate pair check,
-                // but such a pair would be a str::ScalarValue anyway.
-                str::LoneSurrogate(s) => string.push_char(unsafe { transmute(s as u32) })
+                str::LoneSurrogate(s) => {
+                    // Surrogates are known to be in the code point range.
+                    let code_point = unsafe { CodePoint::from_u32_unchecked(s as u32) };
+                    // Skip the WTF-8 concatenation check,
+                    // surrogate pairs are already decoded by str::utf16_items
+                    not_quite_std::push_code_point(&mut string, code_point)
+                }
             }
         }
         string
@@ -215,6 +217,39 @@ impl Wtf8String {
     #[inline]
     pub fn as_slice(&self) -> &Wtf8Slice {
         unsafe { transmute(self.bytes.as_slice()) }
+    }
+
+    /// Reserves capacity for at least `additional` more bytes to be inserted
+    /// in the given `Wtf8String`.
+    /// The collection may reserve more space to avoid frequent reallocations.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the new capacity overflows `uint`.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let mut s = Wtf8String::new();
+    /// s.reserve(10);
+    /// assert!(s.capacity() >= 10);
+    /// ```
+    #[inline]
+    pub fn reserve(&mut self, additional: uint) {
+        self.bytes.reserve(additional)
+    }
+
+    /// Returns the number of bytes that this string buffer can hold without reallocating.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// let s = Wtf8String::with_capacity(10);
+    /// assert!(s.capacity() >= 10);
+    /// ```
+    #[inline]
+    pub fn capacity(&self) -> uint {
+        self.bytes.capacity()
     }
 
     /// Append an UTF-8 slice at the end of the string.
@@ -248,13 +283,7 @@ impl Wtf8String {
     /// Append a Unicode scalar value at the end of the string.
     #[inline]
     pub fn push_char(&mut self, c: char) {
-        unsafe {
-            // We’re violating some of the invariants of String here,
-            // but String::push only assumes a subset of these invariants
-            // that still hold for Wtf8String.
-            let not_really_a_string: &mut String = transmute(self);
-            not_really_a_string.push(c)
-        }
+        not_quite_std::push_code_point(self, CodePoint::from_char(c))
     }
 
     /// Append a code point at the end of the string.
@@ -279,14 +308,8 @@ impl Wtf8String {
             _ => {}
         }
 
-        unsafe {
-            // We’re violating some of the invariants of String and char here,
-            // but String::push only assumes a subset of these invariants
-            // that still hold for Wtf8String and CodePoint.
-            let not_really_a_string: &mut String = transmute(self);
-            let not_really_a_char: char = transmute(code_point.to_u32());
-            not_really_a_string.push(not_really_a_char)
-        }
+        // No newly paired surrogates at the boundary.
+        not_quite_std::push_code_point(self, code_point)
     }
 
     /// Shortens a string to the specified length.
@@ -297,13 +320,8 @@ impl Wtf8String {
     /// or if `new_len` is not a code point boundary.
     #[inline]
     pub fn truncate(&mut self, new_len: uint) {
-        unsafe {
-            // We’re violating some of the invariants of String here,
-            // but String::truncate only assumes a subset of these invariants
-            // that still hold for Wtf8String.
-            let not_really_a_string: &mut String = transmute(self);
-            not_really_a_string.truncate(new_len)
-        }
+        assert!(not_quite_std::is_code_point_boundary(self.as_slice(), new_len));
+        self.bytes.truncate(new_len)
     }
 
     /// Consume the WTF-8 string and try to convert it to UTF-8.
@@ -456,12 +474,13 @@ impl Wtf8Slice {
     /// or point beyond the end of the string.
     #[inline]
     pub fn slice(&self, begin: uint, end: uint) -> &Wtf8Slice {
-        unsafe {
-            // We’re violating some of the invariants of &str here,
-            // but &str::slice only assumes a subset of these invariants
-            // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(&self.bytes);
-            Wtf8Slice::from_str(not_really_a_str.slice(begin, end))
+        // is_code_point_boundary checks that the index is in [0, .len()]
+        if begin <= end &&
+           not_quite_std::is_code_point_boundary(self, begin) &&
+           not_quite_std::is_code_point_boundary(self, end) {
+            unsafe { not_quite_std::slice_unchecked(self, begin, end) }
+        } else {
+            not_quite_std::slice_error_fail(self, begin, end)
         }
     }
 
@@ -473,12 +492,11 @@ impl Wtf8Slice {
     /// or is beyond the end of the string.
     #[inline]
     pub fn slice_from(&self, begin: uint) -> &Wtf8Slice {
-        unsafe {
-            // We’re violating some of the invariants of &str here,
-            // but &str::slice only assumes a subset of these invariants
-            // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(&self.bytes);
-            Wtf8Slice::from_str(not_really_a_str.slice_from(begin))
+        // is_code_point_boundary checks that the index is in [0, .len()]
+        if not_quite_std::is_code_point_boundary(self, begin) {
+            unsafe { not_quite_std::slice_unchecked(self, begin, self.len()) }
+        } else {
+            not_quite_std::slice_error_fail(self, begin, self.len())
         }
     }
 
@@ -490,12 +508,11 @@ impl Wtf8Slice {
     /// or is beyond the end of the string.
     #[inline]
     pub fn slice_to(&self, end: uint) -> &Wtf8Slice {
-        unsafe {
-            // We’re violating some of the invariants of &str here,
-            // but &str::slice only assumes a subset of these invariants
-            // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(&self.bytes);
-            Wtf8Slice::from_str(not_really_a_str.slice_to(end))
+        // is_code_point_boundary checks that the index is in [0, .len()]
+        if not_quite_std::is_code_point_boundary(self, end) {
+            unsafe { not_quite_std::slice_unchecked(self, 0, end) }
+        } else {
+            not_quite_std::slice_error_fail(self, 0, end)
         }
     }
 
@@ -534,26 +551,13 @@ impl Wtf8Slice {
     /// or is beyond the end of the string.
     #[inline]
     pub fn code_point_range_at(&self, position: uint) -> (CodePoint, uint) {
-        unsafe {
-            // We’re violating some of the invariants of &str here,
-            // but &str::slice only assumes a subset of these invariants
-            // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(&self.bytes);
-            let range = not_really_a_str.char_range_at(position);
-            (CodePoint::from_char(range.ch), range.next)
-        }
+        not_quite_std::code_point_range_at(self, position)
     }
 
     /// Return an iterator for the string’s code points.
     #[inline]
     pub fn code_points(&self) -> Wtf8CodePoints {
-        unsafe {
-            // We’re violating some of the invariants of &str here,
-            // but &str::chars only assumes a subset of these invariants
-            // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(&self.bytes);
-            Wtf8CodePoints { not_really_chars: not_really_a_str.chars() }
-        }
+        Wtf8CodePoints { bytes: self.bytes.iter() }
     }
 
     /// Try to convert the string to UTF-8 and return a `&str` slice.
@@ -609,14 +613,8 @@ impl Wtf8Slice {
     /// calling `Wtf8String::from_ill_formed_utf16` on the resulting code units
     /// would always return the original WTF-8 string.
     #[inline]
-    pub fn to_ill_formed_utf16(&self) -> Utf16CodeUnits {
-        unsafe {
-            // We’re violating some of the invariants of &str here,
-            // but &str::to_utf16 only assumes a subset of these invariants
-            // that still hold for Wtf8Slice.
-            let not_really_a_str = str::raw::from_utf8(&self.bytes);
-            not_really_a_str.utf16_units()
-        }
+    pub fn to_ill_formed_utf16(&self) -> IllFormedUtf16CodeUnits {
+        IllFormedUtf16CodeUnits { code_points: self.code_points(), extra: 0 }
     }
 
     #[inline]
@@ -696,16 +694,41 @@ fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
 /// Created with the method `.code_points()`.
 #[deriving(Clone)]
 pub struct Wtf8CodePoints<'a> {
-    not_really_chars: str::Chars<'a>
+    bytes: slice::Items<'a, u8>
 }
 
 impl<'a> Iterator<CodePoint> for Wtf8CodePoints<'a> {
     #[inline]
     fn next(&mut self) -> Option<CodePoint> {
-        match self.not_really_chars.next() {
-            Some(not_really_char) => Some(CodePoint::from_char(not_really_char)),
-            None => None
-        }
+        not_quite_std::next_code_point(&mut self.bytes)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (uint, Option<uint>) {
+        let (len, _) = self.bytes.size_hint();
+        (len.saturating_add(3) / 4, Some(len))
+    }
+}
+
+#[deriving(Clone)]
+pub struct IllFormedUtf16CodeUnits<'a> {
+    code_points: Wtf8CodePoints<'a>,
+    extra: u16
+}
+
+impl<'a> Iterator<u16> for IllFormedUtf16CodeUnits<'a> {
+    #[inline]
+    fn next(&mut self) -> Option<u16> {
+        not_quite_std::next_utf16_code_unit(self)
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (uint, Option<uint>) {
+        let (low, high) = self.code_points.size_hint();
+        // every code point gets either one u16 or two u16,
+        // so this iterator is between 1 or 2 times as
+        // long as the underlying iterator.
+        (low, high.and_then(|n| n.checked_mul(&2)))
     }
 }
 
