@@ -34,7 +34,7 @@ extern crate "native" as rt;  // provides the `start` lang item, compensate for 
 use core::prelude::*;
 
 use collections::hash::{Hash, Writer};
-use collections::slice::{CloneableVector};
+use collections::slice::{CloneSliceAllocPrelude};
 use collections::str;
 use collections::string;
 use collections::string::String;
@@ -227,7 +227,7 @@ impl Wtf8String {
                 self.bytes.truncate(len_without_lead_surrogate);
                 let other_without_trail_surrogate = other.bytes.slice_from(3);
                 // 4 bytes for the supplementary code point
-                self.bytes.reserve_additional(4 + other_without_trail_surrogate.len());
+                self.bytes.reserve(4 + other_without_trail_surrogate.len());
                 self.push_char(decode_surrogate_pair(lead, trail));
                 self.bytes.push_all(other_without_trail_surrogate);
             }
@@ -354,7 +354,7 @@ impl Extendable<CodePoint> for Wtf8String {
     fn extend<T: Iterator<CodePoint>>(&mut self, mut iterator: T) {
         let (low, _high) = iterator.size_hint();
         // Lower bound of one byte per code point (ASCII only)
-        self.bytes.reserve_additional(low);
+        self.bytes.reserve(low);
         for code_point in iterator {
             self.push(code_point);
         }
@@ -365,9 +365,31 @@ impl Extendable<CodePoint> for Wtf8String {
 ///
 /// Similar to `&str`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
-#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone)]
+#[deriving(Eq, PartialEq, Clone)]
 pub struct Wtf8Slice<'a> {
     bytes: &'a [u8]
+}
+
+// FIXME: https://github.com/rust-lang/rust/issues/18738
+impl<'a> PartialOrd for Wtf8Slice<'a> {
+    #[inline]
+    fn partial_cmp(&self, other: &Wtf8Slice) -> Option<Ordering> {
+        self.bytes.partial_cmp(other.bytes)
+    }
+    #[inline]
+    fn lt(&self, other: &Wtf8Slice) -> bool { self.bytes.lt(other.bytes) }
+    #[inline]
+    fn le(&self, other: &Wtf8Slice) -> bool { self.bytes.le(other.bytes) }
+    #[inline]
+    fn gt(&self, other: &Wtf8Slice) -> bool { self.bytes.gt(other.bytes) }
+    #[inline]
+    fn ge(&self, other: &Wtf8Slice) -> bool { self.bytes.ge(other.bytes) }
+}
+
+// FIXME: https://github.com/rust-lang/rust/issues/18738
+impl<'a> Ord for Wtf8Slice<'a> {
+    #[inline]
+    fn cmp(&self, other: &Wtf8Slice) -> Ordering { self.bytes.cmp(other.bytes) }
 }
 
 
