@@ -378,7 +378,7 @@ impl FromIterator<CodePoint> for Wtf8String {
 ///
 /// This replaces surrogate code point pairs with supplementary code points,
 /// like concatenating ill-formed UTF-16 strings effectively would.
-impl Extendable<CodePoint> for Wtf8String {
+impl Extend<CodePoint> for Wtf8String {
     fn extend<T: Iterator<CodePoint>>(&mut self, mut iterator: T) {
         let (low, _high) = iterator.size_hint();
         // Lower bound of one byte per code point (ASCII only)
