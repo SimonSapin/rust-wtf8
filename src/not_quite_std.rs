@@ -1,7 +1,7 @@
 //! The code in this module is copied from Rust standard library
 //! (the `std` crate and crates it is a facade for)
 //! at commit 16d80de231abb2b1756f3951ffd4776d681035eb,
-//! with the signature changed to use `Wtf8String`, `Wtf8Slice`, and `CodePoint`
+//! with the signature changed to use `Wtf8Buf`, `Wtf8`, and `CodePoint`
 //! instead of `String`, `&str`, and `char`.
 //!
 //! FIXME: if and when this is moved into the standard library,
@@ -12,13 +12,13 @@ use core::mem;
 use core::prelude::*;
 use core::raw::Slice as RawSlice;
 use core::slice;
-use super::{Wtf8String, Wtf8Slice, CodePoint, IllFormedUtf16CodeUnits};
+use super::{Wtf8Buf, Wtf8, CodePoint, IllFormedUtf16CodeUnits};
 
 
 /// Copied from String::push
 /// This does **not** include the WTF-8 concatenation check.
 #[inline]
-pub fn push_code_point(string: &mut Wtf8String, code_point: CodePoint) {
+pub fn push_code_point(string: &mut Wtf8Buf, code_point: CodePoint) {
     let cur_len = string.len();
     // This may use up to 4 bytes.
     string.reserve(4);
@@ -77,7 +77,7 @@ static MAX_THREE_B: u32 =  0x10000u32;
 
 /// Copied from core::str::StrPrelude::is_char_boundary
 #[inline]
-pub fn is_code_point_boundary(slice: &Wtf8Slice, index: uint) -> bool {
+pub fn is_code_point_boundary(slice: &Wtf8, index: uint) -> bool {
     if index == slice.len() { return true; }
     match slice.bytes.get(index) {
         None => false,
@@ -87,7 +87,7 @@ pub fn is_code_point_boundary(slice: &Wtf8Slice, index: uint) -> bool {
 
 /// Copied from core::str::raw::slice_unchecked
 #[inline]
-pub unsafe fn slice_unchecked(s: &Wtf8Slice, begin: uint, end: uint) -> &Wtf8Slice {
+pub unsafe fn slice_unchecked(s: &Wtf8, begin: uint, end: uint) -> &Wtf8 {
     mem::transmute(RawSlice {
         data: s.bytes.as_ptr().offset(begin as int),
         len: end - begin,
@@ -96,7 +96,7 @@ pub unsafe fn slice_unchecked(s: &Wtf8Slice, begin: uint, end: uint) -> &Wtf8Sli
 
 /// Copied from core::str::raw::slice_error_fail
 #[inline(never)]
-pub fn slice_error_fail(s: &Wtf8Slice, begin: uint, end: uint) -> ! {
+pub fn slice_error_fail(s: &Wtf8, begin: uint, end: uint) -> ! {
     assert!(begin <= end);
     panic!("index {} and/or {} in `{}` do not lie on character boundary",
           begin, end, s);
@@ -116,13 +116,13 @@ macro_rules! utf8_acc_cont_byte(
 
 /// Copied from core::str::StrPrelude::char_range_at
 #[inline]
-pub fn code_point_range_at(slice: &Wtf8Slice, i: uint) -> (CodePoint, uint) {
+pub fn code_point_range_at(slice: &Wtf8, i: uint) -> (CodePoint, uint) {
     if slice.bytes[i] < 128u8 {
         return (CodePoint::from_char(slice.bytes[i] as char), i + 1);
     }
 
     // Multibyte case is a fn to allow code_point_range_at to inline cleanly
-    fn multibyte_code_point_range_at(s: &Wtf8Slice, i: uint) -> (CodePoint, uint) {
+    fn multibyte_code_point_range_at(s: &Wtf8, i: uint) -> (CodePoint, uint) {
         let mut val = s.bytes[i] as u32;
         let w = UTF8_CHAR_WIDTH[val as uint] as uint;
         assert!((w != 0));
