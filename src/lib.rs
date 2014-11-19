@@ -41,7 +41,7 @@ use collections::string::String;
 use collections::vec::Vec;
 use core::fmt;
 use core::mem::transmute;
-use core::num::Saturating;
+use core::num::Int;
 use core::slice;
 
 // Compensate for #[no_std]
@@ -728,7 +728,7 @@ impl<'a> Iterator<u16> for IllFormedUtf16CodeUnits<'a> {
         // every code point gets either one u16 or two u16,
         // so this iterator is between 1 or 2 times as
         // long as the underlying iterator.
-        (low, high.and_then(|n| n.checked_mul(&2)))
+        (low, high.and_then(|n| n.checked_mul(2)))
     }
 }
 
@@ -829,9 +829,9 @@ mod tests {
 
     #[test]
     fn wtf8string_from_ill_formed_utf16() {
-        assert_eq!(Wtf8String::from_ill_formed_utf16([]).bytes.as_slice(), b"");
+        assert_eq!(Wtf8String::from_ill_formed_utf16(&[]).bytes.as_slice(), b"");
         assert_eq!(Wtf8String::from_ill_formed_utf16(
-                       [0x61, 0xE9, 0x20, 0xD83D, 0xD83D, 0xDCA9]).bytes.as_slice(),
+                      &[0x61, 0xE9, 0x20, 0xD83D, 0xD83D, 0xDCA9]).bytes.as_slice(),
                    b"a\xC3\xA9 \xED\xA0\xBD\xF0\x9F\x92\xA9");
     }
 
@@ -983,15 +983,15 @@ mod tests {
         fn f(values: &[u32]) -> Wtf8String {
             values.iter().map(|&c| CodePoint::from_u32(c).unwrap()).collect::<Wtf8String>()
         };
-        assert_eq!(f([0x61, 0xE9, 0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9")
+        assert_eq!(f(&[0x61, 0xE9, 0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9")
 
-        assert_eq!(f([0xD83D, 0xDCA9]).bytes.as_slice(), b"\xF0\x9F\x92\xA9");  // Magic!
-        assert_eq!(f([0xD83D, 0x20, 0xDCA9]).bytes.as_slice(), b"\xED\xA0\xBD \xED\xB2\xA9");
-        assert_eq!(f([0xD800, 0xDBFF]).bytes.as_slice(), b"\xED\xA0\x80\xED\xAF\xBF");
-        assert_eq!(f([0xD800, 0xE000]).bytes.as_slice(), b"\xED\xA0\x80\xEE\x80\x80");
-        assert_eq!(f([0xD7FF, 0xDC00]).bytes.as_slice(), b"\xED\x9F\xBF\xED\xB0\x80");
-        assert_eq!(f([0x61, 0xDC00]).bytes.as_slice(), b"\x61\xED\xB0\x80");
-        assert_eq!(f([0xDC00]).bytes.as_slice(), b"\xED\xB0\x80");
+        assert_eq!(f(&[0xD83D, 0xDCA9]).bytes.as_slice(), b"\xF0\x9F\x92\xA9");  // Magic!
+        assert_eq!(f(&[0xD83D, 0x20, 0xDCA9]).bytes.as_slice(), b"\xED\xA0\xBD \xED\xB2\xA9");
+        assert_eq!(f(&[0xD800, 0xDBFF]).bytes.as_slice(), b"\xED\xA0\x80\xED\xAF\xBF");
+        assert_eq!(f(&[0xD800, 0xE000]).bytes.as_slice(), b"\xED\xA0\x80\xEE\x80\x80");
+        assert_eq!(f(&[0xD7FF, 0xDC00]).bytes.as_slice(), b"\xED\x9F\xBF\xED\xB0\x80");
+        assert_eq!(f(&[0x61, 0xDC00]).bytes.as_slice(), b"\x61\xED\xB0\x80");
+        assert_eq!(f(&[0xDC00]).bytes.as_slice(), b"\xED\xB0\x80");
     }
 
     #[test]
@@ -1003,15 +1003,15 @@ mod tests {
             string
         };
 
-        assert_eq!(e([0x61, 0xE9], [0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9")
+        assert_eq!(e(&[0x61, 0xE9], &[0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9")
 
-        assert_eq!(e([0xD83D], [0xDCA9]).bytes.as_slice(), b"\xF0\x9F\x92\xA9");  // Magic!
-        assert_eq!(e([0xD83D, 0x20], [0xDCA9]).bytes.as_slice(), b"\xED\xA0\xBD \xED\xB2\xA9");
-        assert_eq!(e([0xD800], [0xDBFF]).bytes.as_slice(), b"\xED\xA0\x80\xED\xAF\xBF");
-        assert_eq!(e([0xD800], [0xE000]).bytes.as_slice(), b"\xED\xA0\x80\xEE\x80\x80");
-        assert_eq!(e([0xD7FF], [0xDC00]).bytes.as_slice(), b"\xED\x9F\xBF\xED\xB0\x80");
-        assert_eq!(e([0x61], [0xDC00]).bytes.as_slice(), b"\x61\xED\xB0\x80");
-        assert_eq!(e([], [0xDC00]).bytes.as_slice(), b"\xED\xB0\x80");
+        assert_eq!(e(&[0xD83D], &[0xDCA9]).bytes.as_slice(), b"\xF0\x9F\x92\xA9");  // Magic!
+        assert_eq!(e(&[0xD83D, 0x20], &[0xDCA9]).bytes.as_slice(), b"\xED\xA0\xBD \xED\xB2\xA9");
+        assert_eq!(e(&[0xD800], &[0xDBFF]).bytes.as_slice(), b"\xED\xA0\x80\xED\xAF\xBF");
+        assert_eq!(e(&[0xD800], &[0xE000]).bytes.as_slice(), b"\xED\xA0\x80\xEE\x80\x80");
+        assert_eq!(e(&[0xD7FF], &[0xDC00]).bytes.as_slice(), b"\xED\x9F\xBF\xED\xB0\x80");
+        assert_eq!(e(&[0x61], &[0xDC00]).bytes.as_slice(), b"\x61\xED\xB0\x80");
+        assert_eq!(e(&[], &[0xDC00]).bytes.as_slice(), b"\xED\xB0\x80");
     }
 
     #[test]
