@@ -28,13 +28,10 @@ extern crate collections;
 #[phase(link, plugin)]
 extern crate std;
 
-#[cfg(test)]
-extern crate "native" as rt;  // provides the `start` lang item, compensate for #![no_std]
-
 use core::prelude::*;
 
-use collections::hash::{Hash, Writer};
-use collections::slice::{CloneSliceAllocPrelude};
+use core::hash::{Hash, Writer};
+use collections::slice::CloneSliceExt;
 use collections::str;
 use collections::string;
 use collections::string::String;
@@ -72,7 +69,7 @@ pub struct CodePoint {
 /// Example: `U+1F4A9`
 impl fmt::Show for CodePoint {
     #[inline]
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::FormatError> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(formatter, "U+{:04X}", self.value)
     }
 }
@@ -154,7 +151,7 @@ impl Deref<Wtf8> for Wtf8Buf {
 /// Example: `"a\uD800"` for a string with code points [U+0061, U+D800]
 impl fmt::Show for Wtf8Buf {
     #[inline]
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::FormatError> {
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.as_slice().fmt(formatter)
     }
 }
@@ -432,8 +429,8 @@ impl Ord for Wtf8 {
 /// and surrogates as `\u` followed by four hexadecimal digits.
 /// Example: `"a\uD800"` for a slice with code points [U+0061, U+D800]
 impl fmt::Show for Wtf8 {
-    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::FormatError> {
-        try!(formatter.write(b"\""))
+    fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+        try!(formatter.write(b"\""));
         let mut pos = 0;
         loop {
             match self.next_surrogate(pos) {
@@ -766,46 +763,46 @@ mod tests {
 
     #[test]
     fn code_point_from_u32() {
-        assert!(CodePoint::from_u32(0).is_some())
-        assert!(CodePoint::from_u32(0xD800).is_some())
-        assert!(CodePoint::from_u32(0x10FFFF).is_some())
-        assert!(CodePoint::from_u32(0x110000).is_none())
+        assert!(CodePoint::from_u32(0).is_some());
+        assert!(CodePoint::from_u32(0xD800).is_some());
+        assert!(CodePoint::from_u32(0x10FFFF).is_some());
+        assert!(CodePoint::from_u32(0x110000).is_none());
     }
 
     #[test]
     fn code_point_to_u32() {
         fn c(value: u32) -> CodePoint { CodePoint::from_u32(value).unwrap() }
-        assert_eq!(c(0).to_u32(), 0)
-        assert_eq!(c(0xD800).to_u32(), 0xD800)
-        assert_eq!(c(0x10FFFF).to_u32(), 0x10FFFF)
+        assert_eq!(c(0).to_u32(), 0);
+        assert_eq!(c(0xD800).to_u32(), 0xD800);
+        assert_eq!(c(0x10FFFF).to_u32(), 0x10FFFF);
     }
 
     #[test]
     fn code_point_from_char() {
-        assert_eq!(CodePoint::from_char('a').to_u32(), 0x61)
-        assert_eq!(CodePoint::from_char('💩').to_u32(), 0x1F4A9)
+        assert_eq!(CodePoint::from_char('a').to_u32(), 0x61);
+        assert_eq!(CodePoint::from_char('💩').to_u32(), 0x1F4A9);
     }
 
     #[test]
     fn code_point_to_string() {
-        assert_eq!(format!("{}", CodePoint::from_char('a')).as_slice(), "U+0061")
-        assert_eq!(format!("{}", CodePoint::from_char('💩')).as_slice(), "U+1F4A9")
+        assert_eq!(format!("{}", CodePoint::from_char('a')).as_slice(), "U+0061");
+        assert_eq!(format!("{}", CodePoint::from_char('💩')).as_slice(), "U+1F4A9");
     }
 
     #[test]
     fn code_point_to_char() {
         fn c(value: u32) -> CodePoint { CodePoint::from_u32(value).unwrap() }
-        assert_eq!(c(0x61).to_char(), Some('a'))
-        assert_eq!(c(0x1F4A9).to_char(), Some('💩'))
-        assert_eq!(c(0xD800).to_char(), None)
+        assert_eq!(c(0x61).to_char(), Some('a'));
+        assert_eq!(c(0x1F4A9).to_char(), Some('💩'));
+        assert_eq!(c(0xD800).to_char(), None);
     }
 
     #[test]
     fn code_point_to_char_lossy() {
         fn c(value: u32) -> CodePoint { CodePoint::from_u32(value).unwrap() }
-        assert_eq!(c(0x61).to_char_lossy(), 'a')
-        assert_eq!(c(0x1F4A9).to_char_lossy(), '💩')
-        assert_eq!(c(0xD800).to_char_lossy(), '\uFFFD')
+        assert_eq!(c(0x61).to_char_lossy(), 'a');
+        assert_eq!(c(0x1F4A9).to_char_lossy(), '💩');
+        assert_eq!(c(0xD800).to_char_lossy(), '\uFFFD');
     }
 
     #[test]
@@ -983,7 +980,7 @@ mod tests {
         fn f(values: &[u32]) -> Wtf8Buf {
             values.iter().map(|&c| CodePoint::from_u32(c).unwrap()).collect::<Wtf8Buf>()
         };
-        assert_eq!(f(&[0x61, 0xE9, 0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9")
+        assert_eq!(f(&[0x61, 0xE9, 0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9");
 
         assert_eq!(f(&[0xD83D, 0xDCA9]).bytes.as_slice(), b"\xF0\x9F\x92\xA9");  // Magic!
         assert_eq!(f(&[0xD83D, 0x20, 0xDCA9]).bytes.as_slice(), b"\xED\xA0\xBD \xED\xB2\xA9");
@@ -1003,7 +1000,7 @@ mod tests {
             string
         };
 
-        assert_eq!(e(&[0x61, 0xE9], &[0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9")
+        assert_eq!(e(&[0x61, 0xE9], &[0x20, 0x1F4A9]).bytes.as_slice(), b"a\xC3\xA9 \xF0\x9F\x92\xA9");
 
         assert_eq!(e(&[0xD83D], &[0xDCA9]).bytes.as_slice(), b"\xF0\x9F\x92\xA9");  // Magic!
         assert_eq!(e(&[0xD83D, 0x20], &[0xDCA9]).bytes.as_slice(), b"\xED\xA0\xBD \xED\xB2\xA9");

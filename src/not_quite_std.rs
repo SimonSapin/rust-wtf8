@@ -107,12 +107,12 @@ pub fn slice_error_fail(s: &Wtf8, begin: uint, end: uint) -> ! {
 // for width 3, and 3 bits for width 4
 macro_rules! utf8_first_byte(
     ($byte:expr, $width:expr) => (($byte & (0x7F >> $width)) as u32)
-)
+);
 
 // return the value of $ch updated with continuation byte $byte
 macro_rules! utf8_acc_cont_byte(
     ($ch:expr, $byte:expr) => (($ch << 6) | ($byte & CONT_MASK) as u32)
-)
+);
 
 /// Copied from core::str::StrPrelude::char_range_at
 #[inline]
