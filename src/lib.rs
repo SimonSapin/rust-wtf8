@@ -30,10 +30,10 @@ extern crate std;
 
 use core::prelude::*;
 
+use core::borrow::Cow;
 use core::hash::{Hash, Writer};
 use collections::slice::CloneSliceExt;
 use collections::str;
-use collections::string;
 use collections::string::String;
 use collections::vec::Vec;
 use core::fmt;
@@ -64,6 +64,9 @@ static UTF8_REPLACEMENT_CHARACTER: &'static [u8] = b"\xEF\xBF\xBD";
 pub struct CodePoint {
     value: u32
 }
+
+impl Copy for CodePoint {}
+
 
 /// Format the code point as `U+` followed by four to six hexadecimal digits.
 /// Example: `U+1F4A9`
@@ -330,7 +333,7 @@ impl Wtf8Buf {
     /// the original WTF-8 string is returned instead.
     pub fn into_string(self) -> Result<String, Wtf8Buf> {
         match self.next_surrogate(0) {
-            None => Ok(unsafe { string::raw::from_utf8(self.bytes) }),
+            None => Ok(unsafe { String::from_utf8_unchecked(self.bytes) }),
             Some(_) => Err(self),
         }
     }
@@ -351,7 +354,7 @@ impl Wtf8Buf {
                         UTF8_REPLACEMENT_CHARACTER
                     );
                 },
-                None => return unsafe { string::raw::from_utf8(self.bytes) }
+                None => return unsafe { String::from_utf8_unchecked(self.bytes) }
             }
         }
     }
@@ -437,7 +440,7 @@ impl fmt::Show for Wtf8 {
                 None => break,
                 Some((surrogate_pos, surrogate)) => {
                     try!(formatter.write(self.bytes.slice(pos, surrogate_pos)));
-                    try!(write!(formatter, "\\u{:X}", surrogate));
+                    try!(write!(formatter, "\\u{{{:X}}}", surrogate));
                     pos = surrogate_pos + 3;
                 }
             }
@@ -567,7 +570,7 @@ impl Wtf8 {
         // Well-formed WTF-8 is also well-formed UTF-8
         // if and only if it contains no surrogate.
         match self.next_surrogate(0) {
-            None => Some(unsafe { str::raw::from_utf8(&self.bytes) }),
+            None => Some(unsafe { str::from_utf8_unchecked(&self.bytes) }),
             Some(_) => None,
         }
     }
@@ -578,9 +581,9 @@ impl Wtf8 {
     /// Surrogates are replaced with `"\u{FFFD}"` (the replacement character “�”).
     ///
     /// This only copies the data if necessary (if it contains any surrogate).
-    pub fn to_string_lossy(&self) -> str::MaybeOwned {
+    pub fn to_string_lossy(&self) -> str::CowString {
         let surrogate_pos = match self.next_surrogate(0) {
-            None => return str::Slice(unsafe { str::raw::from_utf8(&self.bytes) }),
+            None => return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) }),
             Some((pos, _)) => pos,
         };
         let wtf8_bytes = &self.bytes;
@@ -597,7 +600,7 @@ impl Wtf8 {
                 },
                 None => {
                     utf8_bytes.push_all(wtf8_bytes.slice_from(pos));
-                    return str::Owned(unsafe { string::raw::from_utf8(utf8_bytes) })
+                    return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) })
                 }
             }
         }
@@ -757,7 +760,7 @@ impl<'a, S: Writer> Hash<S> for Wtf8 {
 #[cfg(test)]
 mod tests {
     use std::prelude::*;
-    use std::str;
+    use std::borrow::Cow;
     use super::*;
     use std::mem::transmute;
 
@@ -1134,11 +1137,11 @@ mod tests {
 
     #[test]
     fn wtf8_to_string_lossy() {
-        assert_eq!(Wtf8::from_str("").to_string_lossy(), str::Slice(""));
-        assert_eq!(Wtf8::from_str("aé 💩").to_string_lossy(), str::Slice("aé 💩"));
+        assert_eq!(Wtf8::from_str("").to_string_lossy(), Cow::Borrowed(""));
+        assert_eq!(Wtf8::from_str("aé 💩").to_string_lossy(), Cow::Borrowed("aé 💩"));
         let mut string = Wtf8Buf::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
-        assert_eq!(string.to_string_lossy(), str::Owned(String::from_str("aé 💩�")));
+        assert_eq!(string.to_string_lossy(), Cow::Owned(String::from_str("aé 💩�")));
     }
 
     #[test]
