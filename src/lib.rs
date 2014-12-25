@@ -23,6 +23,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 extern crate core;
 
 extern crate collections;
+extern crate unicode;
 
 #[cfg(test)]
 #[phase(link, plugin)]
@@ -40,6 +41,7 @@ use core::fmt;
 use core::mem::transmute;
 use core::num::Int;
 use core::slice;
+use unicode::str::{Utf16Item, utf16_items};
 
 // Compensate for #[no_std]
 #[cfg(not(test))]
@@ -199,14 +201,14 @@ impl Wtf8Buf {
     /// will always return the original code units.
     pub fn from_ill_formed_utf16(v: &[u16]) -> Wtf8Buf {
         let mut string = Wtf8Buf::with_capacity(v.len());
-        for item in str::utf16_items(v) {
+        for item in utf16_items(v) {
             match item {
-                str::ScalarValue(c) => string.push_char(c),
-                str::LoneSurrogate(s) => {
+                Utf16Item::ScalarValue(c) => string.push_char(c),
+                Utf16Item::LoneSurrogate(s) => {
                     // Surrogates are known to be in the code point range.
                     let code_point = unsafe { CodePoint::from_u32_unchecked(s as u32) };
                     // Skip the WTF-8 concatenation check,
-                    // surrogate pairs are already decoded by str::utf16_items
+                    // surrogate pairs are already decoded by utf16_items
                     not_quite_std::push_code_point(&mut string, code_point)
                 }
             }
@@ -694,7 +696,7 @@ fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
 /// Created with the method `.code_points()`.
 #[deriving(Clone)]
 pub struct Wtf8CodePoints<'a> {
-    bytes: slice::Items<'a, u8>
+    bytes: slice::Iter<'a, u8>
 }
 
 impl<'a> Iterator<CodePoint> for Wtf8CodePoints<'a> {

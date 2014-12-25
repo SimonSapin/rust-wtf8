@@ -166,7 +166,7 @@ static UTF8_CHAR_WIDTH: [u8, ..256] = [
 
 
 /// Copied from core::str::Chars::next
-pub fn next_code_point(bytes: &mut slice::Items<u8>) -> Option<CodePoint> {
+pub fn next_code_point(bytes: &mut slice::Iter<u8>) -> Option<CodePoint> {
     #[inline]
     fn unwrap_or_0(opt: Option<&u8>) -> u8 {
         match opt {
