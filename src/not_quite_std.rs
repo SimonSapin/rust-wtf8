@@ -145,7 +145,7 @@ const CONT_MASK: u8 = 0b0011_1111u8;
 
 // Copied from core::str
 // https://tools.ietf.org/html/rfc3629
-static UTF8_CHAR_WIDTH: [u8, ..256] = [
+static UTF8_CHAR_WIDTH: [u8; 256] = [
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1, // 0x1F
 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,
@@ -217,7 +217,7 @@ pub fn next_utf16_code_unit(iter: &mut IllFormedUtf16CodeUnits) -> Option<u16> {
         return Some(tmp);
     }
 
-    let mut buf = [0u16, ..2];
+    let mut buf = [0u16; 2];
     iter.code_points.next().map(|code_point| {
         let n = encode_utf16(code_point, buf.as_mut_slice()).unwrap_or(0);
         if n == 2 { iter.extra = buf[1]; }

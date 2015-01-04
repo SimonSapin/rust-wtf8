@@ -15,7 +15,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(globs, default_type_params, phase, macro_rules)]
+#![feature(globs, default_type_params, phase, macro_rules, associated_types, old_orphan_check)]
 
 #![no_std]
 
@@ -31,15 +31,17 @@ extern crate std;
 
 use core::prelude::*;
 
-use core::borrow::Cow;
-use core::hash::{Hash, Writer};
-use collections::slice::CloneSliceExt;
 use collections::str;
 use collections::string::String;
 use collections::vec::Vec;
+use core::borrow::Cow;
+use core::cmp::Ordering;
 use core::fmt;
+use core::hash::{Hash, Writer};
+use core::iter::FromIterator;
 use core::mem::transmute;
 use core::num::Int;
+use core::ops::Deref;
 use core::slice;
 use unicode::str::{Utf16Item, utf16_items};
 
@@ -47,9 +49,9 @@ use unicode::str::{Utf16Item, utf16_items};
 #[cfg(not(test))]
 mod std {
     pub use core::fmt;      // necessary for write!()
-    pub use core::option;   // deriving(PartialOrd)
-    pub use core::clone;    // deriving(Clone)
-    pub use core::cmp;      // deriving(Eq, Ord, etc.)
+    pub use core::option;   // derive(PartialOrd)
+    pub use core::clone;    // derive(Clone)
+    pub use core::cmp;      // derive(Eq, Ord, etc.)
 }
 
 mod not_quite_std;
@@ -62,7 +64,7 @@ static UTF8_REPLACEMENT_CHARACTER: &'static [u8] = b"\xEF\xBF\xBD";
 /// Compare with the `char` type,
 /// which represents a Unicode scalar value:
 /// a code point that is not a surrogate (U+D800 to U+DFFF).
-#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct CodePoint {
     value: u32
 }
@@ -140,12 +142,14 @@ impl CodePoint {
 ///
 /// Similar to `String`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
-#[deriving(Eq, PartialEq, Ord, PartialOrd, Clone)]
+#[derive(Eq, PartialEq, Ord, PartialOrd, Clone)]
 pub struct Wtf8Buf {
     bytes: Vec<u8>
 }
 
-impl Deref<Wtf8> for Wtf8Buf {
+impl Deref for Wtf8Buf {
+    type Target = Wtf8;
+
     fn deref(&self) -> &Wtf8 {
         self.as_slice()
     }
@@ -192,6 +196,7 @@ impl Wtf8Buf {
     /// Since WTF-8 is a superset of UTF-8, this always succeeds.
     #[inline]
     pub fn from_str(str: &str) -> Wtf8Buf {
+        use collections::slice::SliceExt;
         Wtf8Buf { bytes: str.as_bytes().to_vec() }
     }
 
@@ -435,20 +440,24 @@ impl Ord for Wtf8 {
 /// Example: `"a\u{D800}"` for a slice with code points [U+0061, U+D800]
 impl fmt::Show for Wtf8 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        try!(formatter.write(b"\""));
+        try!(formatter.write_str("\""));
         let mut pos = 0;
         loop {
             match self.next_surrogate(pos) {
                 None => break,
                 Some((surrogate_pos, surrogate)) => {
-                    try!(formatter.write(self.bytes.slice(pos, surrogate_pos)));
+                    try!(formatter.write_str(unsafe {
+                        str::from_utf8_unchecked(self.bytes.slice(pos, surrogate_pos))
+                    }));
                     try!(write!(formatter, "\\u{{{:X}}}", surrogate));
                     pos = surrogate_pos + 3;
                 }
             }
         }
-        try!(formatter.write(self.bytes.slice_from(pos)));
-        formatter.write(b"\"")
+        try!(formatter.write_str(unsafe {
+            str::from_utf8_unchecked(self.bytes.slice_from(pos))
+        }));
+        formatter.write_str("\"")
     }
 }
 
@@ -694,7 +703,7 @@ fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
 /// Iterator for the code points of a WTF-8 string.
 ///
 /// Created with the method `.code_points()`.
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct Wtf8CodePoints<'a> {
     bytes: slice::Iter<'a, u8>
 }
@@ -712,7 +721,7 @@ impl<'a> Iterator<CodePoint> for Wtf8CodePoints<'a> {
     }
 }
 
-#[deriving(Clone)]
+#[derive(Clone)]
 pub struct IllFormedUtf16CodeUnits<'a> {
     code_points: Wtf8CodePoints<'a>,
     extra: u16
@@ -761,7 +770,7 @@ impl<'a, S: Writer> Hash<S> for Wtf8 {
 
 #[cfg(test)]
 mod tests {
-    use std::prelude::*;
+    use std::prelude::v1::*;
     use std::borrow::Cow;
     use super::*;
     use std::mem::transmute;
