@@ -695,7 +695,7 @@ fn decode_surrogate(second_byte: u8, third_byte: u8) -> u16 {
 
 #[inline]
 fn decode_surrogate_pair(lead: u16, trail: u16) -> char {
-    let code_point = 0x10000 + (((lead - 0xD800) as u32 << 10) | (trail - 0xDC00) as u32);
+    let code_point = 0x10000 + (((lead as u32 - 0xD800) << 10) | (trail as u32 - 0xDC00));
     unsafe { transmute(code_point) }
 }
 
