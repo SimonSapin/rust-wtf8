@@ -373,7 +373,7 @@ impl Wtf8Buf {
 /// This replaces surrogate code point pairs with supplementary code points,
 /// like concatenating ill-formed UTF-16 strings effectively would.
 impl FromIterator<CodePoint> for Wtf8Buf {
-    fn from_iter<T: Iterator<CodePoint>>(iterator: T) -> Wtf8Buf {
+    fn from_iter<T: Iterator<Item = CodePoint>>(iterator: T) -> Wtf8Buf {
         let mut string = Wtf8Buf::new();
         string.extend(iterator);
         string
@@ -386,7 +386,7 @@ impl FromIterator<CodePoint> for Wtf8Buf {
 /// This replaces surrogate code point pairs with supplementary code points,
 /// like concatenating ill-formed UTF-16 strings effectively would.
 impl Extend<CodePoint> for Wtf8Buf {
-    fn extend<T: Iterator<CodePoint>>(&mut self, mut iterator: T) {
+    fn extend<T: Iterator<Item = CodePoint>>(&mut self, mut iterator: T) {
         let (low, _high) = iterator.size_hint();
         // Lower bound of one byte per code point (ASCII only)
         self.bytes.reserve(low);
@@ -708,7 +708,9 @@ pub struct Wtf8CodePoints<'a> {
     bytes: slice::Iter<'a, u8>
 }
 
-impl<'a> Iterator<CodePoint> for Wtf8CodePoints<'a> {
+impl<'a> Iterator for Wtf8CodePoints<'a> {
+    type Item = CodePoint;
+
     #[inline]
     fn next(&mut self) -> Option<CodePoint> {
         not_quite_std::next_code_point(&mut self.bytes)
@@ -727,7 +729,9 @@ pub struct IllFormedUtf16CodeUnits<'a> {
     extra: u16
 }
 
-impl<'a> Iterator<u16> for IllFormedUtf16CodeUnits<'a> {
+impl<'a> Iterator for IllFormedUtf16CodeUnits<'a> {
+    type Item = u16;
+
     #[inline]
     fn next(&mut self) -> Option<u16> {
         not_quite_std::next_utf16_code_unit(self)
