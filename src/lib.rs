@@ -32,7 +32,7 @@ extern crate std;
 use core::prelude::*;
 
 use collections::str;
-use collections::string::String;
+use collections::string::{String, CowString};
 use collections::vec::Vec;
 use core::borrow::Cow;
 use core::cmp::Ordering;
@@ -592,7 +592,7 @@ impl Wtf8 {
     /// Surrogates are replaced with `"\u{FFFD}"` (the replacement character “�”).
     ///
     /// This only copies the data if necessary (if it contains any surrogate).
-    pub fn to_string_lossy(&self) -> str::CowString {
+    pub fn to_string_lossy(&self) -> CowString {
         let surrogate_pos = match self.next_surrogate(0) {
             None => return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) }),
             Some((pos, _)) => pos,
