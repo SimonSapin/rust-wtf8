@@ -27,7 +27,7 @@ pub fn push_code_point(string: &mut Wtf8Buf, code_point: CodePoint) {
         // Attempt to not use an intermediate buffer by just pushing bytes
         // directly onto this string.
         let slice = RawSlice {
-            data: string.bytes.as_ptr().offset(cur_len as int),
+            data: string.bytes.as_ptr().offset(cur_len as isize),
             len: 4,
         };
         let used = encode_wtf8(code_point, mem::transmute(slice)).unwrap_or(0);
@@ -38,25 +38,25 @@ pub fn push_code_point(string: &mut Wtf8Buf, code_point: CodePoint) {
 
 /// Copied from core::char::Char::encode_utf8
 #[inline]
-pub fn encode_wtf8(code_point: CodePoint, dst: &mut [u8]) -> Option<uint> {
+pub fn encode_wtf8(code_point: CodePoint, dst: &mut [u8]) -> Option<usize> {
     // Marked #[inline] to allow llvm optimizing it away
     let code = code_point.value;
     if code < MAX_ONE_B && dst.len() >= 1 {
         dst[0] = code as u8;
         Some(1)
     } else if code < MAX_TWO_B && dst.len() >= 2 {
-        dst[0] = (code >> 6u & 0x1F_u32) as u8 | TAG_TWO_B;
+        dst[0] = (code >> 6 & 0x1F_u32) as u8 | TAG_TWO_B;
         dst[1] = (code & 0x3F_u32) as u8 | TAG_CONT;
         Some(2)
     } else if code < MAX_THREE_B && dst.len() >= 3  {
-        dst[0] = (code >> 12u & 0x0F_u32) as u8 | TAG_THREE_B;
-        dst[1] = (code >>  6u & 0x3F_u32) as u8 | TAG_CONT;
+        dst[0] = (code >> 12 & 0x0F_u32) as u8 | TAG_THREE_B;
+        dst[1] = (code >>  6 & 0x3F_u32) as u8 | TAG_CONT;
         dst[2] = (code & 0x3F_u32) as u8 | TAG_CONT;
         Some(3)
     } else if dst.len() >= 4 {
-        dst[0] = (code >> 18u & 0x07_u32) as u8 | TAG_FOUR_B;
-        dst[1] = (code >> 12u & 0x3F_u32) as u8 | TAG_CONT;
-        dst[2] = (code >>  6u & 0x3F_u32) as u8 | TAG_CONT;
+        dst[0] = (code >> 18 & 0x07_u32) as u8 | TAG_FOUR_B;
+        dst[1] = (code >> 12 & 0x3F_u32) as u8 | TAG_CONT;
+        dst[2] = (code >>  6 & 0x3F_u32) as u8 | TAG_CONT;
         dst[3] = (code & 0x3F_u32) as u8 | TAG_CONT;
         Some(4)
     } else {
@@ -77,7 +77,7 @@ static MAX_THREE_B: u32 =  0x10000u32;
 
 /// Copied from core::str::StrPrelude::is_char_boundary
 #[inline]
-pub fn is_code_point_boundary(slice: &Wtf8, index: uint) -> bool {
+pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool {
     if index == slice.len() { return true; }
     match slice.bytes.get(index) {
         None => false,
@@ -87,18 +87,18 @@ pub fn is_code_point_boundary(slice: &Wtf8, index: uint) -> bool {
 
 /// Copied from core::str::raw::slice_unchecked
 #[inline]
-pub unsafe fn slice_unchecked(s: &Wtf8, begin: uint, end: uint) -> &Wtf8 {
+pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8 {
     mem::transmute(RawSlice {
-        data: s.bytes.as_ptr().offset(begin as int),
+        data: s.bytes.as_ptr().offset(begin as isize),
         len: end - begin,
     })
 }
 
 /// Copied from core::str::raw::slice_error_fail
 #[inline(never)]
-pub fn slice_error_fail(s: &Wtf8, begin: uint, end: uint) -> ! {
+pub fn slice_error_fail(s: &Wtf8, begin: usize, end: usize) -> ! {
     assert!(begin <= end);
-    panic!("index {} and/or {} in `{}` do not lie on character boundary",
+    panic!("index {} and/or {} in {:?} do not lie on character boundary",
           begin, end, s);
 }
 
@@ -116,15 +116,15 @@ macro_rules! utf8_acc_cont_byte(
 
 /// Copied from core::str::StrPrelude::char_range_at
 #[inline]
-pub fn code_point_range_at(slice: &Wtf8, i: uint) -> (CodePoint, uint) {
+pub fn code_point_range_at(slice: &Wtf8, i: usize) -> (CodePoint, usize) {
     if slice.bytes[i] < 128u8 {
         return (CodePoint::from_char(slice.bytes[i] as char), i + 1);
     }
 
     // Multibyte case is a fn to allow code_point_range_at to inline cleanly
-    fn multibyte_code_point_range_at(s: &Wtf8, i: uint) -> (CodePoint, uint) {
+    fn multibyte_code_point_range_at(s: &Wtf8, i: usize) -> (CodePoint, usize) {
         let mut val = s.bytes[i] as u32;
-        let w = UTF8_CHAR_WIDTH[val as uint] as uint;
+        let w = UTF8_CHAR_WIDTH[val as usize] as usize;
         assert!((w != 0));
 
         val = utf8_first_byte!(val, w);
@@ -227,7 +227,7 @@ pub fn next_utf16_code_unit(iter: &mut IllFormedUtf16CodeUnits) -> Option<u16> {
 
 /// Copied from core::char::Char::encode_utf16
 #[inline]
-fn encode_utf16(code_point: CodePoint, dst: &mut [u16]) -> Option<uint> {
+fn encode_utf16(code_point: CodePoint, dst: &mut [u16]) -> Option<usize> {
     // Marked #[inline] to allow llvm optimizing it away
     let mut ch = code_point.to_u32();
     if (ch & 0xFFFF_u32) == ch  && dst.len() >= 1 {
