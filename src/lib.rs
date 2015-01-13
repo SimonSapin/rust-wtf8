@@ -17,42 +17,22 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 #![allow(unstable)]
 
-#![no_std]
-
-#[macro_use]
-extern crate core;
-
-extern crate collections;
 extern crate unicode;
 
-#[cfg(test)]
-#[macro_use]
-extern crate std;
 
-use core::prelude::*;
-
-use collections::str;
-use collections::string::{String, CowString};
-use collections::vec::Vec;
-use core::borrow::Cow;
-use core::cmp::Ordering;
-use core::fmt;
-use core::hash::{self, Hash};
-use core::iter::FromIterator;
-use core::mem::transmute;
-use core::num::Int;
-use core::ops::Deref;
-use core::slice;
+use std::str;
+use std::string::CowString;
+use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::fmt;
+use std::hash::{self, Hash};
+use std::iter::FromIterator;
+use std::mem::transmute;
+use std::num::Int;
+use std::ops::Deref;
+use std::slice;
 use unicode::str::{Utf16Item, utf16_items};
 
-// Compensate for #[no_std]
-#[cfg(not(test))]
-mod std {
-    pub use core::fmt;      // necessary for write!()
-    pub use core::option;   // derive(PartialOrd)
-    pub use core::clone;    // derive(Clone)
-    pub use core::cmp;      // derive(Eq, Ord, etc.)
-}
 
 mod not_quite_std;
 
@@ -196,7 +176,7 @@ impl Wtf8Buf {
     /// Since WTF-8 is a superset of UTF-8, this always succeeds.
     #[inline]
     pub fn from_str(str: &str) -> Wtf8Buf {
-        use collections::slice::SliceExt;
+        use std::slice::SliceExt;
         Wtf8Buf { bytes: str.as_bytes().to_vec() }
     }
 
@@ -787,10 +767,9 @@ impl<'a, S: hash::Hasher + hash::Writer> Hash<S> for Wtf8 {
 
 #[cfg(test)]
 mod tests {
-    use std::prelude::v1::*;
     use std::borrow::Cow;
-    use super::*;
     use std::mem::transmute;
+    use super::*;
 
     #[test]
     fn code_point_from_u32() {

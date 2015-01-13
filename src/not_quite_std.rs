@@ -8,10 +8,9 @@
 //! try to avoid the code duplication.
 //! Maybe by having private generic code that is monomorphized to UTF-8 and WTF-8?
 
-use core::mem;
-use core::prelude::*;
-use core::raw::Slice as RawSlice;
-use core::slice;
+use std::mem;
+use std::raw::Slice as RawSlice;
+use std::slice;
 use super::{Wtf8Buf, Wtf8, CodePoint, IllFormedUtf16CodeUnits};
 
 
