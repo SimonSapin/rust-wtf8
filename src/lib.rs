@@ -54,7 +54,7 @@ impl Copy for CodePoint {}
 
 /// Format the code point as `U+` followed by four to six hexadecimal digits.
 /// Example: `U+1F4A9`
-impl fmt::Show for CodePoint {
+impl fmt::Debug for CodePoint {
     #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         write!(formatter, "U+{:04X}", self.value)
@@ -138,7 +138,7 @@ impl Deref for Wtf8Buf {
 /// Format the string with double quotes,
 /// and surrogates as `\u` followed by four hexadecimal digits.
 /// Example: `"a\u{D800}"` for a string with code points [U+0061, U+D800]
-impl fmt::Show for Wtf8Buf {
+impl fmt::Debug for Wtf8Buf {
     #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         self.as_slice().fmt(formatter)
@@ -257,7 +257,7 @@ impl Wtf8Buf {
             (Some(lead), Some(trail)) => {
                 let len_without_lead_surrogate = self.len() - 3;
                 self.bytes.truncate(len_without_lead_surrogate);
-                let other_without_trail_surrogate = other.bytes.slice_from(3);
+                let other_without_trail_surrogate = &other.bytes[3..];
                 // 4 bytes for the supplementary code point
                 self.bytes.reserve(4 + other_without_trail_surrogate.len());
                 self.push_char(decode_surrogate_pair(lead, trail));
@@ -337,7 +337,7 @@ impl Wtf8Buf {
                 Some((surrogate_pos, _)) => {
                     pos = surrogate_pos + 3;
                     slice::bytes::copy_memory(
-                        self.bytes.slice_mut(surrogate_pos, pos),
+                        &mut self.bytes[surrogate_pos..pos],
                         UTF8_REPLACEMENT_CHARACTER
                     );
                 },
@@ -418,7 +418,7 @@ impl Ord for Wtf8 {
 /// Format the slice with double quotes,
 /// and surrogates as `\u` followed by four hexadecimal digits.
 /// Example: `"a\u{D800}"` for a slice with code points [U+0061, U+D800]
-impl fmt::Show for Wtf8 {
+impl fmt::Debug for Wtf8 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
         try!(formatter.write_str("\""));
         let mut pos = 0;
@@ -427,7 +427,7 @@ impl fmt::Show for Wtf8 {
                 None => break,
                 Some((surrogate_pos, surrogate)) => {
                     try!(formatter.write_str(unsafe {
-                        str::from_utf8_unchecked(self.bytes.slice(pos, surrogate_pos))
+                        str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
                     }));
                     try!(write!(formatter, "\\u{{{:X}}}", surrogate));
                     pos = surrogate_pos + 3;
@@ -435,7 +435,7 @@ impl fmt::Show for Wtf8 {
             }
         }
         try!(formatter.write_str(unsafe {
-            str::from_utf8_unchecked(self.bytes.slice_from(pos))
+            str::from_utf8_unchecked(&self.bytes[pos..])
         }));
         formatter.write_str("\"")
     }
@@ -579,18 +579,18 @@ impl Wtf8 {
         };
         let wtf8_bytes = &self.bytes;
         let mut utf8_bytes = Vec::with_capacity(self.len());
-        utf8_bytes.push_all(wtf8_bytes.slice_to(surrogate_pos));
+        utf8_bytes.push_all(&wtf8_bytes[..surrogate_pos]);
         utf8_bytes.push_all(UTF8_REPLACEMENT_CHARACTER);
         let mut pos = surrogate_pos + 3;
         loop {
             match self.next_surrogate(pos) {
                 Some((surrogate_pos, _)) => {
-                    utf8_bytes.push_all(wtf8_bytes.slice(pos, surrogate_pos));
+                    utf8_bytes.push_all(&wtf8_bytes[pos..surrogate_pos]);
                     utf8_bytes.push_all(UTF8_REPLACEMENT_CHARACTER);
                     pos = surrogate_pos + 3;
                 },
                 None => {
-                    utf8_bytes.push_all(wtf8_bytes.slice_from(pos));
+                    utf8_bytes.push_all(&wtf8_bytes[pos..]);
                     return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) })
                 }
             }
@@ -610,7 +610,7 @@ impl Wtf8 {
 
     #[inline]
     fn next_surrogate(&self, mut pos: usize) -> Option<(usize, u16)> {
-        let mut iter = self.bytes.slice_from(pos).iter();
+        let mut iter = self.bytes[pos..].iter();
         loop {
             let b = match iter.next() {
                 None => return None,
@@ -647,7 +647,7 @@ impl Wtf8 {
         if len < 3 {
             return None
         }
-        match self.bytes.slice_from(len - 3) {
+        match &self.bytes[len - 3..] {
             [0xED, b2 @ 0xA0...0xAF, b3] => Some(decode_surrogate(b2, b3)),
             _ => None
         }
@@ -659,7 +659,7 @@ impl Wtf8 {
         if len < 3 {
             return None
         }
-        match self.bytes.slice_to(3) {
+        match &self.bytes[..3] {
             [0xED, b2 @ 0xB0...0xBF, b3] => Some(decode_surrogate(b2, b3)),
             _ => None
         }
@@ -768,6 +768,7 @@ impl<'a, S: hash::Hasher + hash::Writer> Hash<S> for Wtf8 {
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
+    use std::string::CowString;
     use std::mem::transmute;
     use super::*;
 
@@ -1021,7 +1022,7 @@ mod tests {
     }
 
     #[test]
-    fn wtf8buf_show() {
+    fn wtf8buf_debug() {
         let mut string = Wtf8Buf::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
         assert_eq!(format!("{:?}", string), r#""aé 💩\u{D800}""#);
@@ -1033,7 +1034,7 @@ mod tests {
     }
 
     #[test]
-    fn wtf8_show() {
+    fn wtf8_debug() {
         let mut string = Wtf8Buf::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
         assert_eq!(format!("{:?}", string.as_slice()), r#""aé 💩\u{D800}""#);
@@ -1147,7 +1148,10 @@ mod tests {
         assert_eq!(Wtf8::from_str("aé 💩").to_string_lossy(), Cow::Borrowed("aé 💩"));
         let mut string = Wtf8Buf::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
-        assert_eq!(string.to_string_lossy(), Cow::Owned(String::from_str("aé 💩�")));
+        assert_eq!(string.to_string_lossy(), {
+            let o: CowString = Cow::Owned(String::from_str("aé 💩�"));
+            o
+        });
     }
 
     #[test]
