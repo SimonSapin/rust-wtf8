@@ -17,9 +17,11 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 #![allow(unstable)]
 
+extern crate core;
 extern crate unicode;
 
 
+use core::str::{next_code_point, char_range_at_raw};
 use std::str;
 use std::string::CowString;
 use std::borrow::Cow;
@@ -542,7 +544,8 @@ impl Wtf8 {
     /// or is beyond the end of the string.
     #[inline]
     pub fn code_point_range_at(&self, position: usize) -> (CodePoint, usize) {
-        not_quite_std::code_point_range_at(self, position)
+        let (c, n) =  char_range_at_raw(&self.bytes, position);
+        (unsafe { CodePoint::from_u32_unchecked(c) }, n)
     }
 
     /// Return an iterator for the string’s code points.
@@ -693,7 +696,16 @@ impl<'a> Iterator for Wtf8CodePoints<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<CodePoint> {
-        not_quite_std::next_code_point(&mut self.bytes)
+        match next_code_point(&mut self.bytes) {
+            None => None,
+            Some(value) => {
+                // Wtf8 invariant says `value` is a valid code point
+                unsafe {
+                    Some(CodePoint::from_u32_unchecked(value))
+                }
+            }
+        }
+
     }
 
     #[inline]
