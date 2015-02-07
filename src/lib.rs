@@ -15,7 +15,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![allow(unstable)]
+#![feature(core, collections, hash, unicode)]
 
 extern crate core;
 extern crate unicode;
@@ -368,7 +368,7 @@ impl FromIterator<CodePoint> for Wtf8Buf {
 /// This replaces surrogate code point pairs with supplementary code points,
 /// like concatenating ill-formed UTF-16 strings effectively would.
 impl Extend<CodePoint> for Wtf8Buf {
-    fn extend<T: Iterator<Item = CodePoint>>(&mut self, mut iterator: T) {
+    fn extend<T: Iterator<Item = CodePoint>>(&mut self, iterator: T) {
         let (low, _high) = iterator.size_hint();
         // Lower bound of one byte per code point (ASCII only)
         self.bytes.reserve(low);
