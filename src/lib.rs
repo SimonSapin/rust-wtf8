@@ -15,7 +15,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(core, collections, hash, unicode)]
+#![feature(core, collections, unicode)]
 
 extern crate core;
 extern crate unicode;
@@ -23,12 +23,11 @@ extern crate unicode;
 
 use core::str::{next_code_point, char_range_at_raw};
 use std::str;
-use std::string::CowString;
 use std::borrow::Cow;
 use std::cmp::Ordering;
 use std::fmt;
-use std::hash::{self, Hash};
-use std::iter::FromIterator;
+use std::hash;
+use std::iter::{FromIterator, IntoIterator};
 use std::mem::transmute;
 use std::num::Int;
 use std::ops::Deref;
@@ -355,9 +354,9 @@ impl Wtf8Buf {
 /// This replaces surrogate code point pairs with supplementary code points,
 /// like concatenating ill-formed UTF-16 strings effectively would.
 impl FromIterator<CodePoint> for Wtf8Buf {
-    fn from_iter<T: Iterator<Item = CodePoint>>(iterator: T) -> Wtf8Buf {
+    fn from_iter<T: IntoIterator<Item = CodePoint>>(iterable: T) -> Wtf8Buf {
         let mut string = Wtf8Buf::new();
-        string.extend(iterator);
+        string.extend(iterable);
         string
     }
 }
@@ -368,7 +367,8 @@ impl FromIterator<CodePoint> for Wtf8Buf {
 /// This replaces surrogate code point pairs with supplementary code points,
 /// like concatenating ill-formed UTF-16 strings effectively would.
 impl Extend<CodePoint> for Wtf8Buf {
-    fn extend<T: Iterator<Item = CodePoint>>(&mut self, iterator: T) {
+    fn extend<T: IntoIterator<Item = CodePoint>>(&mut self, iterable: T) {
+        let iterator = iterable.into_iter();
         let (low, _high) = iterator.size_hint();
         // Lower bound of one byte per code point (ASCII only)
         self.bytes.reserve(low);
@@ -575,7 +575,7 @@ impl Wtf8 {
     /// Surrogates are replaced with `"\u{FFFD}"` (the replacement character “�”).
     ///
     /// This only copies the data if necessary (if it contains any surrogate).
-    pub fn to_string_lossy(&self) -> CowString {
+    pub fn to_string_lossy(&self) -> Cow<str> {
         let surrogate_pos = match self.next_surrogate(0) {
             None => return Cow::Borrowed(unsafe { str::from_utf8_unchecked(&self.bytes) }),
             Some((pos, _)) => pos,
@@ -753,24 +753,24 @@ impl<'a> PartialEq<Wtf8Buf> for &'a Wtf8 {
 }
 
 
-impl<S: hash::Hasher + hash::Writer> Hash<S> for CodePoint {
+impl hash::Hash for CodePoint {
     #[inline]
-    fn hash(&self, state: &mut S) {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         self.value.hash(state)
     }
 }
 
-impl<S: hash::Hasher + hash::Writer> Hash<S> for Wtf8Buf {
+impl hash::Hash for Wtf8Buf {
     #[inline]
-    fn hash(&self, state: &mut S) {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         state.write(self.bytes.as_slice());
         0xfeu8.hash(state)
     }
 }
 
-impl<'a, S: hash::Hasher + hash::Writer> Hash<S> for Wtf8 {
+impl hash::Hash for Wtf8 {
     #[inline]
-    fn hash(&self, state: &mut S) {
+    fn hash<H: hash::Hasher>(&self, state: &mut H) {
         state.write(&self.bytes);
         0xfeu8.hash(state)
     }
@@ -780,7 +780,6 @@ impl<'a, S: hash::Hasher + hash::Writer> Hash<S> for Wtf8 {
 #[cfg(test)]
 mod tests {
     use std::borrow::Cow;
-    use std::string::CowString;
     use std::mem::transmute;
     use super::*;
 
@@ -1161,7 +1160,7 @@ mod tests {
         let mut string = Wtf8Buf::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
         assert_eq!(string.to_string_lossy(), {
-            let o: CowString = Cow::Owned(String::from_str("aé 💩�"));
+            let o: Cow<str> = Cow::Owned(String::from_str("aé 💩�"));
             o
         });
     }
