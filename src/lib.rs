@@ -177,7 +177,6 @@ impl Wtf8Buf {
     /// Since WTF-8 is a superset of UTF-8, this always succeeds.
     #[inline]
     pub fn from_str(str: &str) -> Wtf8Buf {
-        use std::slice::SliceExt;
         Wtf8Buf { bytes: str.as_bytes().to_vec() }
     }
 
@@ -967,14 +966,14 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn wtf8buf_truncate_fail_code_point_boundary() {
         let mut string = Wtf8Buf::from_str("aé");
         string.truncate(2);
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn wtf8buf_truncate_fail_longer() {
         let mut string = Wtf8Buf::from_str("aé");
         string.truncate(4);
@@ -1069,7 +1068,7 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn wtf8_slice_not_code_point_boundary() {
         Wtf8::from_str("aé 💩").slice(2, 4);
     }
@@ -1080,7 +1079,7 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn wtf8_slice_from_not_code_point_boundary() {
         Wtf8::from_str("aé 💩").slice_from(2);
     }
@@ -1091,7 +1090,7 @@ mod tests {
     }
 
     #[test]
-    #[should_fail]
+    #[should_panic]
     fn wtf8_slice_to_not_code_point_boundary() {
         Wtf8::from_str("aé 💩").slice_from(5);
     }
