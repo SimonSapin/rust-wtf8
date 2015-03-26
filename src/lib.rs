@@ -132,7 +132,7 @@ impl Deref for Wtf8Buf {
     type Target = Wtf8;
 
     fn deref(&self) -> &Wtf8 {
-        self.as_slice()
+        unsafe { transmute(&*self.bytes) }
     }
 }
 
@@ -142,7 +142,7 @@ impl Deref for Wtf8Buf {
 impl fmt::Debug for Wtf8Buf {
     #[inline]
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        self.as_slice().fmt(formatter)
+        Wtf8::fmt(self, formatter)
     }
 }
 
@@ -199,11 +199,6 @@ impl Wtf8Buf {
             }
         }
         string
-    }
-
-    #[inline]
-    pub fn as_slice(&self) -> &Wtf8 {
-        unsafe { transmute(&*self.bytes) }
     }
 
     /// Reserves capacity for at least `additional` more bytes to be inserted
@@ -307,7 +302,7 @@ impl Wtf8Buf {
     /// or if `new_len` is not a code point boundary.
     #[inline]
     pub fn truncate(&mut self, new_len: usize) {
-        assert!(not_quite_std::is_code_point_boundary(self.as_slice(), new_len));
+        assert!(not_quite_std::is_code_point_boundary(self, new_len));
         self.bytes.truncate(new_len)
     }
 
@@ -741,13 +736,13 @@ impl<'a> Iterator for IllFormedUtf16CodeUnits<'a> {
 
 impl<'a> PartialEq<&'a Wtf8> for Wtf8Buf {
     fn eq(&self, other: &&Wtf8) -> bool {
-        self.as_slice() == *other
+        **self == **other
     }
 }
 
 impl<'a> PartialEq<Wtf8Buf> for &'a Wtf8 {
     fn eq(&self, other: &Wtf8Buf) -> bool {
-        *self == other.as_slice()
+        **self == **other
     }
 }
 
@@ -762,7 +757,7 @@ impl hash::Hash for CodePoint {
 impl hash::Hash for Wtf8Buf {
     #[inline]
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        Wtf8::hash(&*self, state)
+        Wtf8::hash(self, state)
     }
 }
 
@@ -1046,7 +1041,7 @@ mod tests {
     fn wtf8_debug() {
         let mut string = Wtf8Buf::from_str("aé 💩");
         string.push(CodePoint::from_u32(0xD800).unwrap());
-        assert_eq!(format!("{:?}", string.as_slice()), r#""aé 💩\u{D800}""#);
+        assert_eq!(format!("{:?}", &*string), r#""aé 💩\u{D800}""#);
     }
 
     #[test]
