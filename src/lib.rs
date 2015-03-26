@@ -203,7 +203,7 @@ impl Wtf8Buf {
 
     #[inline]
     pub fn as_slice(&self) -> &Wtf8 {
-        unsafe { transmute(self.bytes.as_slice()) }
+        unsafe { transmute(&*self.bytes) }
     }
 
     /// Reserves capacity for at least `additional` more bytes to be inserted
@@ -762,8 +762,7 @@ impl hash::Hash for CodePoint {
 impl hash::Hash for Wtf8Buf {
     #[inline]
     fn hash<H: hash::Hasher>(&self, state: &mut H) {
-        state.write(self.bytes.as_slice());
-        0xfeu8.hash(state)
+        Wtf8::hash(&*self, state)
     }
 }
 
