@@ -15,7 +15,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(core, collections, unicode)]
+#![feature(core, collections, unicode, slice_patterns)]
 
 extern crate core;
 extern crate unicode;

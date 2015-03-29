@@ -73,7 +73,7 @@ pub fn next_utf16_code_unit(iter: &mut IllFormedUtf16CodeUnits) -> Option<u16> {
 
     let mut buf = [0u16; 2];
     iter.code_points.next().map(|code_point| {
-        let n = encode_utf16_raw(code_point.to_u32(), buf.as_mut_slice()).unwrap_or(0);
+        let n = encode_utf16_raw(code_point.to_u32(), &mut buf).unwrap_or(0);
         if n == 2 { iter.extra = buf[1]; }
         buf[0]
     })
