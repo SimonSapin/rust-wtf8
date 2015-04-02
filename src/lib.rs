@@ -29,7 +29,6 @@ use std::fmt;
 use std::hash;
 use std::iter::{FromIterator, IntoIterator};
 use std::mem::transmute;
-use std::num::Int;
 use std::ops::Deref;
 use std::slice;
 use unicode::str::{Utf16Item, utf16_items};
@@ -332,8 +331,8 @@ impl Wtf8Buf {
                 Some((surrogate_pos, _)) => {
                     pos = surrogate_pos + 3;
                     slice::bytes::copy_memory(
-                        &mut self.bytes[surrogate_pos..pos],
-                        UTF8_REPLACEMENT_CHARACTER
+                        UTF8_REPLACEMENT_CHARACTER,
+                        &mut self.bytes[surrogate_pos..pos]
                     );
                 },
                 None => return unsafe { String::from_utf8_unchecked(self.bytes) }
