@@ -18,7 +18,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 #![feature(core, collections, unicode, slice_patterns)]
 
 extern crate core;
-extern crate unicode;
+extern crate rustc_unicode;
 
 
 use core::str::{next_code_point, char_range_at_raw};
@@ -31,7 +31,7 @@ use std::iter::{FromIterator, IntoIterator};
 use std::mem::transmute;
 use std::ops::Deref;
 use std::slice;
-use unicode::str::{Utf16Item, utf16_items};
+use rustc_unicode::str::{Utf16Item, utf16_items};
 
 
 mod not_quite_std;
