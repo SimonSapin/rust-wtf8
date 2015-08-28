@@ -15,13 +15,13 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(core, slice_bytes, str_internals, char_internals, raw, vec_push_all, unicode, slice_patterns)]
+#![feature(core, slice_bytes, str_internals, char_internals, raw, vec_push_all, decode_utf16, slice_patterns)]
 
 extern crate core;
-extern crate rustc_unicode;
 
 
 use core::str::next_code_point;
+use std::char;
 use std::str;
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -31,7 +31,6 @@ use std::iter::{FromIterator, IntoIterator};
 use std::mem::transmute;
 use std::ops::Deref;
 use std::slice;
-use rustc_unicode::str::{Utf16Item, utf16_items};
 
 
 mod not_quite_std;
@@ -185,10 +184,10 @@ impl Wtf8Buf {
     /// will always return the original code units.
     pub fn from_ill_formed_utf16(v: &[u16]) -> Wtf8Buf {
         let mut string = Wtf8Buf::with_capacity(v.len());
-        for item in utf16_items(v) {
+        for item in char::decode_utf16(v.iter().cloned()) {
             match item {
-                Utf16Item::ScalarValue(c) => string.push_char(c),
-                Utf16Item::LoneSurrogate(s) => {
+                Ok(c) => string.push_char(c),
+                Err(s) => {
                     // Surrogates are known to be in the code point range.
                     let code_point = unsafe { CodePoint::from_u32_unchecked(s as u32) };
                     // Skip the WTF-8 concatenation check,
