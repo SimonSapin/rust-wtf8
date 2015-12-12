@@ -15,7 +15,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(core, slice_bytes, str_internals, char_internals, raw, vec_push_all, decode_utf16, slice_patterns)]
+#![feature(str_internals, char_internals, raw, decode_utf16, slice_patterns)]
 
 extern crate core;
 
@@ -28,6 +28,7 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash;
 use std::iter::{FromIterator, IntoIterator};
+use std::io::Write;
 use std::mem::transmute;
 use std::ops::Deref;
 use std::slice;
@@ -235,7 +236,7 @@ impl Wtf8Buf {
     /// Append an UTF-8 slice at the end of the string.
     #[inline]
     pub fn push_str(&mut self, other: &str) {
-        self.bytes.push_all(other.as_bytes())
+        self.bytes.extend_from_slice(other.as_bytes())
     }
 
     /// Append a WTF-8 slice at the end of the string.
@@ -254,9 +255,9 @@ impl Wtf8Buf {
                 // 4 bytes for the supplementary code point
                 self.bytes.reserve(4 + other_without_trail_surrogate.len());
                 self.push_char(decode_surrogate_pair(lead, trail));
-                self.bytes.push_all(other_without_trail_surrogate);
+                self.bytes.extend_from_slice(other_without_trail_surrogate);
             }
-            _ => self.bytes.push_all(&other.bytes)
+            _ => self.bytes.extend_from_slice(&other.bytes)
         }
     }
 
@@ -329,10 +330,8 @@ impl Wtf8Buf {
             match self.next_surrogate(pos) {
                 Some((surrogate_pos, _)) => {
                     pos = surrogate_pos + 3;
-                    slice::bytes::copy_memory(
-                        UTF8_REPLACEMENT_CHARACTER,
-                        &mut self.bytes[surrogate_pos..pos]
-                    );
+                    (&mut self.bytes[surrogate_pos..pos])
+                        .write_all(UTF8_REPLACEMENT_CHARACTER).unwrap();
                 },
                 None => return unsafe { String::from_utf8_unchecked(self.bytes) }
             }
@@ -549,18 +548,18 @@ impl Wtf8 {
         };
         let wtf8_bytes = &self.bytes;
         let mut utf8_bytes = Vec::with_capacity(self.len());
-        utf8_bytes.push_all(&wtf8_bytes[..surrogate_pos]);
-        utf8_bytes.push_all(UTF8_REPLACEMENT_CHARACTER);
+        utf8_bytes.extend_from_slice(&wtf8_bytes[..surrogate_pos]);
+        utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER);
         let mut pos = surrogate_pos + 3;
         loop {
             match self.next_surrogate(pos) {
                 Some((surrogate_pos, _)) => {
-                    utf8_bytes.push_all(&wtf8_bytes[pos..surrogate_pos]);
-                    utf8_bytes.push_all(UTF8_REPLACEMENT_CHARACTER);
+                    utf8_bytes.extend_from_slice(&wtf8_bytes[pos..surrogate_pos]);
+                    utf8_bytes.extend_from_slice(UTF8_REPLACEMENT_CHARACTER);
                     pos = surrogate_pos + 3;
                 },
                 None => {
-                    utf8_bytes.push_all(&wtf8_bytes[pos..]);
+                    utf8_bytes.extend_from_slice(&wtf8_bytes[pos..]);
                     return Cow::Owned(unsafe { String::from_utf8_unchecked(utf8_bytes) })
                 }
             }
