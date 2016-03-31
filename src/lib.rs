@@ -15,13 +15,6 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
-#![feature(str_internals, raw, decode_utf16, slice_patterns)]
-
-extern crate core;
-
-
-use core::str::next_code_point;
-use std::char;
 use std::str;
 use std::borrow::Cow;
 use std::cmp::Ordering;
@@ -185,7 +178,7 @@ impl Wtf8Buf {
     /// will always return the original code units.
     pub fn from_ill_formed_utf16(v: &[u16]) -> Wtf8Buf {
         let mut string = Wtf8Buf::with_capacity(v.len());
-        for item in char::decode_utf16(v.iter().cloned()) {
+        for item in not_quite_std::decode_utf16(v.iter().cloned()) {
             match item {
                 Ok(c) => string.push_char(c),
                 Err(s) => {
@@ -616,9 +609,11 @@ impl Wtf8 {
         if len < 3 {
             return None
         }
-        match &self.bytes[len - 3..] {
-            [0xED, b2 @ 0xA0...0xAF, b3] => Some(decode_surrogate(b2, b3)),
-            _ => None
+        let seq = &self.bytes[len - 3..];
+        if seq[0] == 0xED && 0xA0 <= seq[1] && seq[1] <= 0xAF {
+            Some(decode_surrogate(seq[1], seq[2]))
+        } else {
+            None
         }
     }
 
@@ -628,9 +623,11 @@ impl Wtf8 {
         if len < 3 {
             return None
         }
-        match &self.bytes[..3] {
-            [0xED, b2 @ 0xB0...0xBF, b3] => Some(decode_surrogate(b2, b3)),
-            _ => None
+        let seq = &self.bytes[..3];
+        if seq[0] == 0xED && 0xB0 <= seq[1] && seq[1] <= 0xBF {
+            Some(decode_surrogate(seq[1], seq[2]))
+        } else {
+            None
         }
     }
 }
@@ -662,7 +659,7 @@ impl<'a> Iterator for Wtf8CodePoints<'a> {
 
     #[inline]
     fn next(&mut self) -> Option<CodePoint> {
-        match next_code_point(&mut self.bytes) {
+        match not_quite_std::next_code_point(&mut self.bytes) {
             None => None,
             Some(value) => {
                 // Wtf8 invariant says `value` is a valid code point

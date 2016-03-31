@@ -8,8 +8,9 @@
 //! try to avoid the code duplication.
 //! Maybe by having private generic code that is monomorphized to UTF-8 and WTF-8?
 
+use std::char;
 use std::mem;
-use std::raw::Slice as RawSlice;
+use std::slice;
 use super::{Wtf8Buf, Wtf8, CodePoint, IllFormedUtf16CodeUnits};
 
 // UTF-8 ranges and tags for encoding characters
@@ -68,6 +69,56 @@ fn encode_utf16_raw(mut ch: u32, dst: &mut [u16]) -> Option<usize> {
     }
 }
 
+/// Copied from core::str::next_code_point
+#[inline]
+pub fn next_code_point(bytes: &mut slice::Iter<u8>) -> Option<u32> {
+    // Decode UTF-8
+    let x = match bytes.next() {
+        None => return None,
+        Some(&next_byte) if next_byte < 128 => return Some(next_byte as u32),
+        Some(&next_byte) => next_byte,
+    };
+
+    // Multibyte case follows
+    // Decode from a byte combination out of: [[[x y] z] w]
+    // NOTE: Performance is sensitive to the exact formulation here
+    let init = utf8_first_byte(x, 2);
+    let y = unwrap_or_0(bytes.next());
+    let mut ch = utf8_acc_cont_byte(init, y);
+    if x >= 0xE0 {
+        // [[x y z] w] case
+        // 5th bit in 0xE0 .. 0xEF is always clear, so `init` is still valid
+        let z = unwrap_or_0(bytes.next());
+        let y_z = utf8_acc_cont_byte((y & CONT_MASK) as u32, z);
+        ch = init << 12 | y_z;
+        if x >= 0xF0 {
+            // [x y z w] case
+            // use only the lower 3 bits of `init`
+            let w = unwrap_or_0(bytes.next());
+            ch = (init & 7) << 18 | utf8_acc_cont_byte(y_z, w);
+        }
+    }
+
+    Some(ch)
+}
+
+#[inline]
+fn utf8_first_byte(byte: u8, width: u32) -> u32 { (byte & (0x7F >> width)) as u32 }
+
+/// Return the value of `ch` updated with continuation byte `byte`.
+#[inline]
+fn utf8_acc_cont_byte(ch: u32, byte: u8) -> u32 { (ch << 6) | (byte & CONT_MASK) as u32 }
+
+#[inline]
+fn unwrap_or_0(opt: Option<&u8>) -> u8 {
+    match opt {
+        Some(&byte) => byte,
+        None => 0,
+    }
+}
+
+/// Mask of the value bits of a continuation byte
+const CONT_MASK: u8 = 0b0011_1111;
 
 /// Copied from String::push
 /// This does **not** include the WTF-8 concatenation check.
@@ -80,11 +131,11 @@ pub fn push_code_point(string: &mut Wtf8Buf, code_point: CodePoint) {
     unsafe {
         // Attempt to not use an intermediate buffer by just pushing bytes
         // directly onto this string.
-        let slice = RawSlice {
-            data: string.bytes.as_ptr().offset(cur_len as isize),
-            len: 4,
-        };
-        let used = encode_utf8_raw(code_point.to_u32(), mem::transmute(slice)).unwrap_or(0);
+        let slice = slice::from_raw_parts_mut(
+            string.bytes.as_mut_ptr().offset(cur_len as isize),
+            4,
+        );
+        let used = encode_utf8_raw(code_point.to_u32(), slice).unwrap_or(0);
         string.bytes.set_len(cur_len + used);
     }
 }
@@ -103,10 +154,10 @@ pub fn is_code_point_boundary(slice: &Wtf8, index: usize) -> bool {
 /// Copied from core::str::raw::slice_unchecked
 #[inline]
 pub unsafe fn slice_unchecked(s: &Wtf8, begin: usize, end: usize) -> &Wtf8 {
-    mem::transmute(RawSlice {
-        data: s.bytes.as_ptr().offset(begin as isize),
-        len: end - begin,
-    })
+    mem::transmute(slice::from_raw_parts(
+        s.bytes.as_ptr().offset(begin as isize),
+        end - begin,
+    ))
 }
 
 /// Copied from core::str::raw::slice_error_fail
@@ -132,4 +183,69 @@ pub fn next_utf16_code_unit(iter: &mut IllFormedUtf16CodeUnits) -> Option<u16> {
         if n == 2 { iter.extra = buf[1]; }
         buf[0]
     })
+}
+
+/// Copied from src/librustc_unicode/char.rs
+pub struct DecodeUtf16<I>
+    where I: Iterator<Item = u16>
+{
+    iter: I,
+    buf: Option<u16>,
+}
+
+
+/// Copied from src/librustc_unicode/char.rs
+#[inline]
+pub fn decode_utf16<I: IntoIterator<Item = u16>>(iterable: I) -> DecodeUtf16<I::IntoIter> {
+    DecodeUtf16 {
+        iter: iterable.into_iter(),
+        buf: None,
+    }
+}
+
+/// Copied from src/librustc_unicode/char.rs
+impl<I: Iterator<Item=u16>> Iterator for DecodeUtf16<I> {
+    type Item = Result<char, u16>;
+
+    fn next(&mut self) -> Option<Result<char, u16>> {
+        let u = match self.buf.take() {
+            Some(buf) => buf,
+            None => match self.iter.next() {
+                Some(u) => u,
+                None => return None,
+            },
+        };
+
+        if u < 0xD800 || 0xDFFF < u {
+            // not a surrogate
+            Some(Ok(unsafe { char::from_u32_unchecked(u as u32) }))
+        } else if u >= 0xDC00 {
+            // a trailing surrogate
+            Some(Err(u))
+        } else {
+            let u2 = match self.iter.next() {
+                Some(u2) => u2,
+                // eof
+                None => return Some(Err(u)),
+            };
+            if u2 < 0xDC00 || u2 > 0xDFFF {
+                // not a trailing surrogate so we're not a valid
+                // surrogate pair, so rewind to redecode u2 next time.
+                self.buf = Some(u2);
+                return Some(Err(u));
+            }
+
+            // all ok, so lets decode it.
+            let c = (((u - 0xD800) as u32) << 10 | (u2 - 0xDC00) as u32) + 0x1_0000;
+            Some(Ok(unsafe { char::from_u32_unchecked(c) }))
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let (low, high) = self.iter.size_hint();
+        // we could be entirely valid surrogates (2 elements per
+        // char), or entirely non-surrogates (1 element per char)
+        (low / 2, high)
+    }
 }
