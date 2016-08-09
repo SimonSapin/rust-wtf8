@@ -8,9 +8,14 @@
 //! try to avoid the code duplication.
 //! Maybe by having private generic code that is monomorphized to UTF-8 and WTF-8?
 
-use std::char;
-use std::mem;
-use std::slice;
+#[cfg(not(feature = "std"))] use rustc_unicode::char;
+#[cfg(not(feature = "std"))] use core::mem;
+#[cfg(not(feature = "std"))] use collections::slice;
+
+#[cfg(feature = "std")] use std::char;
+#[cfg(feature = "std")] use std::mem;
+#[cfg(feature = "std")] use std::slice;
+
 use super::{Wtf8Buf, Wtf8, CodePoint, IllFormedUtf16CodeUnits};
 
 // UTF-8 ranges and tags for encoding characters
