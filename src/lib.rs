@@ -15,14 +15,53 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 */
 
+#![cfg_attr(not(feature = "std"), feature(collections, unicode))]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+#[cfg(not(feature = "std"))]
+#[macro_use]
+extern crate collections;
+#[cfg(not(feature = "std"))]
+extern crate rustc_unicode;
+
+#[cfg(not(feature = "std"))]
+use collections::{String, Vec};
+#[cfg(not(feature = "std"))]
+use core::str;
+#[cfg(not(feature = "std"))]
+use collections::borrow::Cow;
+#[cfg(not(feature = "std"))]
+use core::cmp::Ordering;
+#[cfg(not(feature = "std"))]
+use core::fmt;
+#[cfg(not(feature = "std"))]
+use core::hash;
+#[cfg(not(feature = "std"))]
+use core::iter::{FromIterator, IntoIterator};
+#[cfg(not(feature = "std"))]
+use core::mem::transmute;
+#[cfg(not(feature = "std"))]
+use core::ops::Deref;
+#[cfg(not(feature = "std"))]
+use collections::slice;
+
+#[cfg(feature = "std")]
 use std::str;
+#[cfg(feature = "std")]
 use std::borrow::Cow;
+#[cfg(feature = "std")]
 use std::cmp::Ordering;
+#[cfg(feature = "std")]
 use std::fmt;
+#[cfg(feature = "std")]
 use std::hash;
+#[cfg(feature = "std")]
 use std::iter::{FromIterator, IntoIterator};
+#[cfg(feature = "std")]
 use std::mem::transmute;
+#[cfg(feature = "std")]
 use std::ops::Deref;
+#[cfg(feature = "std")]
 use std::slice;
 
 
