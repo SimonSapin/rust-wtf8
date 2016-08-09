@@ -21,7 +21,6 @@ use std::cmp::Ordering;
 use std::fmt;
 use std::hash;
 use std::iter::{FromIterator, IntoIterator};
-use std::io::Write;
 use std::mem::transmute;
 use std::ops::Deref;
 use std::slice;
@@ -323,8 +322,9 @@ impl Wtf8Buf {
             match self.next_surrogate(pos) {
                 Some((surrogate_pos, _)) => {
                     pos = surrogate_pos + 3;
-                    (&mut self.bytes[surrogate_pos..pos])
-                        .write_all(UTF8_REPLACEMENT_CHARACTER).unwrap();
+                    for (i, val) in (&mut self.bytes[surrogate_pos..pos]).into_iter().enumerate() {
+                        *val = UTF8_REPLACEMENT_CHARACTER[i]
+                    }
                 },
                 None => return unsafe { String::from_utf8_unchecked(self.bytes) }
             }
