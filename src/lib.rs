@@ -30,6 +30,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 #[cfg(not(feature = "std"))] use core::iter::{FromIterator, IntoIterator};
 #[cfg(not(feature = "std"))] use core::mem::transmute;
 #[cfg(not(feature = "std"))] use core::ops::Deref;
+#[cfg(not(feature = "std"))] use core::mem;
 #[cfg(not(feature = "std"))] use collections::slice;
 
 #[cfg(feature = "std")] use std::str;
@@ -40,6 +41,7 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 #[cfg(feature = "std")] use std::iter::{FromIterator, IntoIterator};
 #[cfg(feature = "std")] use std::mem::transmute;
 #[cfg(feature = "std")] use std::ops::Deref;
+#[cfg(feature = "std")] use std::mem;
 #[cfg(feature = "std")] use std::slice;
 
 
@@ -187,6 +189,10 @@ impl Wtf8Buf {
     pub fn from_str(str: &str) -> Wtf8Buf {
         Wtf8Buf { bytes: str.as_bytes().to_vec() }
     }
+    
+    pub fn clear(&mut self) {
+        self.bytes.clear()
+    }
 
     /// Create a WTF-8 string from a potentially ill-formed UTF-16 slice of 16-bit code units.
     ///
@@ -209,6 +215,11 @@ impl Wtf8Buf {
         string
     }
 
+    #[inline]
+    pub fn as_slice(&self) -> &Wtf8 {
+        unsafe { Wtf8::from_bytes_unchecked(&self.bytes) }
+    }
+
     /// Reserves capacity for at least `additional` more bytes to be inserted
     /// in the given `Wtf8Buf`.
     /// The collection may reserve more space to avoid frequent reallocations.
@@ -227,6 +238,10 @@ impl Wtf8Buf {
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
         self.bytes.reserve(additional)
+    }
+
+    pub fn reserve_exact(&mut self, additional: usize) {
+        self.bytes.reserve_exact(additional)
     }
 
     /// Returns the number of bytes that this string buffer can hold without reallocating.
@@ -452,10 +467,24 @@ impl Wtf8 {
         unsafe { transmute(value.as_bytes()) }
     }
 
+    /// Creates a WTF-8 slice from a WTF-8 byte slice.
+    ///
+    /// Since the byte slice is not checked for valid WTF-8, this function is
+    /// marked unsafe.
+    #[inline]
+    unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8 {
+        mem::transmute(value)
+    }
+
     /// Return the length, in WTF-8 bytes.
     #[inline]
     pub fn len(&self) -> usize {
         self.bytes.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
 
     /// Return a slice of the given string for the byte range [`begin`..`end`).
