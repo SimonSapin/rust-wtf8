@@ -24,7 +24,6 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 #[cfg(not(feature = "std"))] use collections::{String, Vec};
 #[cfg(not(feature = "std"))] use core::str;
 #[cfg(not(feature = "std"))] use collections::borrow::Cow;
-#[cfg(not(feature = "std"))] use core::cmp::Ordering;
 #[cfg(not(feature = "std"))] use core::fmt;
 #[cfg(not(feature = "std"))] use core::hash;
 #[cfg(not(feature = "std"))] use core::iter::{FromIterator, IntoIterator};
@@ -35,7 +34,6 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 #[cfg(feature = "std")] use std::str;
 #[cfg(feature = "std")] use std::borrow::Cow;
-#[cfg(feature = "std")] use std::cmp::Ordering;
 #[cfg(feature = "std")] use std::fmt;
 #[cfg(feature = "std")] use std::hash;
 #[cfg(feature = "std")] use std::iter::{FromIterator, IntoIterator};
@@ -396,40 +394,10 @@ impl Extend<CodePoint> for Wtf8Buf {
 ///
 /// Similar to `&str`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub struct Wtf8 {
     bytes: [u8]
 }
-
-// FIXME: https://github.com/rust-lang/rust/issues/18805
-impl PartialEq for Wtf8 {
-    fn eq(&self, other: &Wtf8) -> bool { self.bytes.eq(&other.bytes) }
-}
-
-// FIXME: https://github.com/rust-lang/rust/issues/18805
-impl Eq for Wtf8 {}
-
-// FIXME: https://github.com/rust-lang/rust/issues/18738
-impl PartialOrd for Wtf8 {
-    #[inline]
-    fn partial_cmp(&self, other: &Wtf8) -> Option<Ordering> {
-        self.bytes.partial_cmp(&other.bytes)
-    }
-    #[inline]
-    fn lt(&self, other: &Wtf8) -> bool { self.bytes.lt(&other.bytes) }
-    #[inline]
-    fn le(&self, other: &Wtf8) -> bool { self.bytes.le(&other.bytes) }
-    #[inline]
-    fn gt(&self, other: &Wtf8) -> bool { self.bytes.gt(&other.bytes) }
-    #[inline]
-    fn ge(&self, other: &Wtf8) -> bool { self.bytes.ge(&other.bytes) }
-}
-
-// FIXME: https://github.com/rust-lang/rust/issues/18738
-impl Ord for Wtf8 {
-    #[inline]
-    fn cmp(&self, other: &Wtf8) -> Ordering { self.bytes.cmp(&other.bytes) }
-}
-
 
 /// Format the slice with double quotes,
 /// and surrogates as `\u` followed by four hexadecimal digits.
