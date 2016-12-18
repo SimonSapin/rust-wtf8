@@ -24,22 +24,22 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 #[cfg(not(feature = "std"))] use collections::{String, Vec};
 #[cfg(not(feature = "std"))] use core::str;
 #[cfg(not(feature = "std"))] use collections::borrow::Cow;
-#[cfg(not(feature = "std"))] use core::cmp::Ordering;
 #[cfg(not(feature = "std"))] use core::fmt;
 #[cfg(not(feature = "std"))] use core::hash;
 #[cfg(not(feature = "std"))] use core::iter::{FromIterator, IntoIterator};
 #[cfg(not(feature = "std"))] use core::mem::transmute;
 #[cfg(not(feature = "std"))] use core::ops::Deref;
+#[cfg(not(feature = "std"))] use core::mem;
 #[cfg(not(feature = "std"))] use collections::slice;
 
 #[cfg(feature = "std")] use std::str;
 #[cfg(feature = "std")] use std::borrow::Cow;
-#[cfg(feature = "std")] use std::cmp::Ordering;
 #[cfg(feature = "std")] use std::fmt;
 #[cfg(feature = "std")] use std::hash;
 #[cfg(feature = "std")] use std::iter::{FromIterator, IntoIterator};
 #[cfg(feature = "std")] use std::mem::transmute;
 #[cfg(feature = "std")] use std::ops::Deref;
+#[cfg(feature = "std")] use std::mem;
 #[cfg(feature = "std")] use std::slice;
 
 
@@ -187,6 +187,10 @@ impl Wtf8Buf {
     pub fn from_str(str: &str) -> Wtf8Buf {
         Wtf8Buf { bytes: str.as_bytes().to_vec() }
     }
+    
+    pub fn clear(&mut self) {
+        self.bytes.clear()
+    }
 
     /// Create a WTF-8 string from a potentially ill-formed UTF-16 slice of 16-bit code units.
     ///
@@ -209,6 +213,11 @@ impl Wtf8Buf {
         string
     }
 
+    #[inline]
+    pub fn as_slice(&self) -> &Wtf8 {
+        unsafe { Wtf8::from_bytes_unchecked(&self.bytes) }
+    }
+
     /// Reserves capacity for at least `additional` more bytes to be inserted
     /// in the given `Wtf8Buf`.
     /// The collection may reserve more space to avoid frequent reallocations.
@@ -227,6 +236,10 @@ impl Wtf8Buf {
     #[inline]
     pub fn reserve(&mut self, additional: usize) {
         self.bytes.reserve(additional)
+    }
+
+    pub fn reserve_exact(&mut self, additional: usize) {
+        self.bytes.reserve_exact(additional)
     }
 
     /// Returns the number of bytes that this string buffer can hold without reallocating.
@@ -381,40 +394,10 @@ impl Extend<CodePoint> for Wtf8Buf {
 ///
 /// Similar to `&str`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
 pub struct Wtf8 {
     bytes: [u8]
 }
-
-// FIXME: https://github.com/rust-lang/rust/issues/18805
-impl PartialEq for Wtf8 {
-    fn eq(&self, other: &Wtf8) -> bool { self.bytes.eq(&other.bytes) }
-}
-
-// FIXME: https://github.com/rust-lang/rust/issues/18805
-impl Eq for Wtf8 {}
-
-// FIXME: https://github.com/rust-lang/rust/issues/18738
-impl PartialOrd for Wtf8 {
-    #[inline]
-    fn partial_cmp(&self, other: &Wtf8) -> Option<Ordering> {
-        self.bytes.partial_cmp(&other.bytes)
-    }
-    #[inline]
-    fn lt(&self, other: &Wtf8) -> bool { self.bytes.lt(&other.bytes) }
-    #[inline]
-    fn le(&self, other: &Wtf8) -> bool { self.bytes.le(&other.bytes) }
-    #[inline]
-    fn gt(&self, other: &Wtf8) -> bool { self.bytes.gt(&other.bytes) }
-    #[inline]
-    fn ge(&self, other: &Wtf8) -> bool { self.bytes.ge(&other.bytes) }
-}
-
-// FIXME: https://github.com/rust-lang/rust/issues/18738
-impl Ord for Wtf8 {
-    #[inline]
-    fn cmp(&self, other: &Wtf8) -> Ordering { self.bytes.cmp(&other.bytes) }
-}
-
 
 /// Format the slice with double quotes,
 /// and surrogates as `\u` followed by four hexadecimal digits.
@@ -452,10 +435,24 @@ impl Wtf8 {
         unsafe { transmute(value.as_bytes()) }
     }
 
+    /// Creates a WTF-8 slice from a WTF-8 byte slice.
+    ///
+    /// Since the byte slice is not checked for valid WTF-8, this function is
+    /// marked unsafe.
+    #[inline]
+    unsafe fn from_bytes_unchecked(value: &[u8]) -> &Wtf8 {
+        mem::transmute(value)
+    }
+
     /// Return the length, in WTF-8 bytes.
     #[inline]
     pub fn len(&self) -> usize {
         self.bytes.len()
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.bytes.is_empty()
     }
 
     /// Return a slice of the given string for the byte range [`begin`..`end`).
