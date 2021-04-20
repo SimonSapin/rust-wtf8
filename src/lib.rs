@@ -17,7 +17,6 @@ WTF-8 strings can be obtained from UTF-8, UTF-16, or code points.
 
 #![no_std]
 
-#[macro_use]
 extern crate alloc;
 
 use alloc::borrow::Cow;
@@ -75,7 +74,7 @@ impl CodePoint {
     #[inline]
     pub fn from_u32(value: u32) -> Option<CodePoint> {
         match value {
-            0 ... 0x10FFFF => Some(CodePoint { value: value }),
+            0 ..= 0x10FFFF => Some(CodePoint { value: value }),
             _ => None
         }
     }
@@ -100,7 +99,7 @@ impl CodePoint {
     #[inline]
     pub fn to_char(&self) -> Option<char> {
         match self.value {
-            0xD800 ... 0xDFFF => None,
+            0xD800 ..= 0xDFFF => None,
             _ => Some(unsafe { transmute(self.value) })
         }
     }
@@ -273,7 +272,7 @@ impl Wtf8Buf {
     #[inline]
     pub fn push(&mut self, code_point: CodePoint) {
         match code_point.to_u32() {
-            trail @ 0xDC00...0xDFFF => {
+            trail @ 0xDC00..=0xDFFF => {
                 match (&*self).final_lead_surrogate() {
                     Some(lead) => {
                         let len_without_lead_surrogate = self.len() - 3;
@@ -410,23 +409,23 @@ impl Ord for Wtf8 {
 /// Example: `"a\u{D800}"` for a slice with code points [U+0061, U+D800]
 impl fmt::Debug for Wtf8 {
     fn fmt(&self, formatter: &mut fmt::Formatter) -> Result<(), fmt::Error> {
-        try!(formatter.write_str("\""));
+        formatter.write_str("\"")?;
         let mut pos = 0;
         loop {
             match self.next_surrogate(pos) {
                 None => break,
                 Some((surrogate_pos, surrogate)) => {
-                    try!(formatter.write_str(unsafe {
+                    formatter.write_str(unsafe {
                         str::from_utf8_unchecked(&self.bytes[pos..surrogate_pos])
-                    }));
-                    try!(write!(formatter, "\\u{{{:X}}}", surrogate));
+                    })?;
+                    write!(formatter, "\\u{{{:X}}}", surrogate)?;
                     pos = surrogate_pos + 3;
                 }
             }
         }
-        try!(formatter.write_str(unsafe {
+        formatter.write_str(unsafe {
             str::from_utf8_unchecked(&self.bytes[pos..])
-        }));
+        })?;
         formatter.write_str("\"")
     }
 }
@@ -506,7 +505,7 @@ impl Wtf8 {
     #[inline]
     pub fn ascii_byte_at(&self, position: usize) -> u8 {
         match self.bytes[position] {
-            ascii_byte @ 0x00 ... 0x7F => ascii_byte,
+            ascii_byte @ 0x00 ..= 0x7F => ascii_byte,
             _ => 0xFF
         }
     }
@@ -745,6 +744,8 @@ impl hash::Hash for Wtf8 {
 
 #[cfg(test)]
 mod tests {
+    use alloc::format;
+    use alloc::vec;
     use core::mem::transmute;
     use super::*;
 
@@ -965,7 +966,7 @@ mod tests {
     fn wtf8buf_from_iterator() {
         fn f(values: &[u32]) -> Wtf8Buf {
             values.iter().map(|&c| CodePoint::from_u32(c).unwrap()).collect::<Wtf8Buf>()
-        };
+        }
         assert_eq!(f(&[0x61, 0xE9, 0x20, 0x1F4A9]).bytes, b"a\xC3\xA9 \xF0\x9F\x92\xA9");
 
         assert_eq!(f(&[0xD83D, 0xDCA9]).bytes, b"\xF0\x9F\x92\xA9");  // Magic!
@@ -984,7 +985,7 @@ mod tests {
             let mut string = initial.iter().map(c).collect::<Wtf8Buf>();
             string.extend(extended.iter().map(c));
             string
-        };
+        }
 
         assert_eq!(e(&[0x61, 0xE9], &[0x20, 0x1F4A9]).bytes, b"a\xC3\xA9 \xF0\x9F\x92\xA9");
 
