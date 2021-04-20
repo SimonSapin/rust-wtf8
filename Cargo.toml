@@ -5,7 +5,6 @@ version = "0.1.0"
 authors = ["Simon Sapin"]
 
 description = "Implementation of the WTF-8 encoding. https://simonsapin.github.io/wtf-8/"
-documentation = "https://simonsapin.github.io/rust-wtf8/wtf8/index.html"
 repository = "https://github.com/SimonSapin/rust-wtf8"
 readme = "README.md"
 keywords = ["unicode", "encoding", "surrogate"]
