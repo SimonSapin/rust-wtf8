@@ -1,8 +1,8 @@
 [package]
 
 name = "wtf8"
-version = "0.0.3"
-authors = ["Simon Sapin <simon.sapin@exyr.org>"]
+version = "0.1.0"
+authors = ["Simon Sapin"]
 
 description = "Implementation of the WTF-8 encoding. https://simonsapin.github.io/wtf-8/"
 documentation = "https://simonsapin.github.io/rust-wtf8/wtf8/index.html"
@@ -14,7 +14,3 @@ license = "MIT"
 [lib]
 name = "wtf8"
 doctest = false
-
-[features]
-default = ["std"]
-std = []
