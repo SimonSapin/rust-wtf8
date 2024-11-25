@@ -1,7 +1,6 @@
 rust-wtf8
 =========
 
-Implementation of [the WTF-8 encoding](https://simonsapin.github.io/wtf-8/).
-Depends on the standard library’s `alloc` crate but not `std`.
+[![No Maintenance Intended](http://unmaintained.tech/badge.svg)](http://unmaintained.tech/)
 
-[Documentation](https://docs.rs/wtf8/)
+Historical implementation of [the WTF-8 encoding](https://simonsapin.github.io/wtf-8/).
