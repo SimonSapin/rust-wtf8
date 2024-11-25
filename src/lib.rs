@@ -369,6 +369,7 @@ impl Extend<CodePoint> for Wtf8Buf {
 ///
 /// Similar to `&str`, but can additionally contain surrogate code points
 /// if they’re not in a surrogate pair.
+#[repr(transparent)]
 pub struct Wtf8 {
     bytes: [u8]
 }
